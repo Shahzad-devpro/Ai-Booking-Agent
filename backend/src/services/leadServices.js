@@ -47,8 +47,18 @@ const getAllLeads = async() => {
     return leads;
 };
 
+const getLeadById = async (id) => {
+    const lead = await prisma.lead.findUnique({
+        where: { id },
+        include : { customer: true}
+    });
+
+    return lead;
+};
+
 
 module.exports = {
     createLead,
-    getAllLeads
+    getAllLeads,
+    getLeadById
 };

@@ -1,3 +1,4 @@
+const { message } = require("../config/database");
 const leadService = require("../services/leadServices");
 const createLead = async (req,res) => {
     try{
@@ -36,7 +37,32 @@ const getAllLeads = async (req, res) => {
     }
 };
 
+const getLeadById = async (req,res) => {
+    try{
+        const lead = await leadService.getLeadById(req.params.id);
+
+        if(!lead) {
+            return res.status(404).json({
+                success: false,
+                message: "Lead not found"
+            });
+        } 
+        res.status(200).json({
+            success: true,
+            Date: lead
+        });
+    } catch(error){
+        console.log("Get lead error",error);
+
+        res.status(500).json({
+            success: false,
+            message: "failed to fetch lead"
+        });
+    }
+};
+
 module.exports = {
     createLead,
-    getAllLeads
+    getAllLeads,
+    getLeadById
 };
