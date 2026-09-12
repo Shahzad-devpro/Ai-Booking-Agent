@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+  
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  EMPLOYEE
+}
+
+enum LeadStatus {
+  NEW
+  AI_QUALIFIED
+  CONTACTED
+  BOOKED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  LOST
+}
+
+enum Urgency {
+  LOW
+  NORMAL
+  HIGH
+  EMERGENCY
+}
+
+enum AppointmentStatus {
+  BOOKED
+  CANCELLED
+  COMPLETED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(EMPLOYEE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Customer {
+  id      String  @id @default(cuid())
+  name    String
+  phone   String
+  email   String?
+  address String
+
+  leads        Lead[]
+  appointments Appointment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Lead {
+  id                 String     @id @default(cuid())
+  customerId         String
+  service            String
+  problemDescription String
+  urgency            Urgency    @default(NORMAL)
+  status             LeadStatus @default(NEW)
+
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  appointment  Appointment?
+  conversation Conversation?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([status])
+  @@index([urgency])
+}
+
+model Appointment {
+  id         String            @id @default(cuid())
+  customerId String
+  leadId     String            @unique
+  startTime  DateTime
+  endTime    DateTime
+  status     AppointmentStatus @default(BOOKED)
+  notes      String?
+
+  customer Customer @relation(fields: [customerId], references: [id])
+  lead     Lead     @relation(fields: [leadId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([startTime])
+}
+
+model Conversation {
+  id     String @id @default(cuid())
+  leadId String @unique
+
+  lead     Lead      @relation(fields: [leadId], references: [id])
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+}
