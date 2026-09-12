@@ -34,6 +34,21 @@ const createLead = async (leadData) => {
     return lead;
 };
 
+const getAllLeads = async() => {
+    const leads = await prisma.lead.findMany({
+        include: {
+            customer: true
+        },
+        orderBy: {
+            createdAt: "desc"
+        }
+    });
+
+    return leads;
+};
+
+
 module.exports = {
-    createLead
+    createLead,
+    getAllLeads
 };

@@ -18,6 +18,25 @@ const createLead = async (req,res) => {
     }
 };
 
+const getAllLeads = async (req, res) => {
+    try{
+        const leads = await leadService.getAllLeads();
+
+        res.status(200).json({
+            success: true,
+            data: leads
+        });
+    } catch(error){
+        console.error("Get leads error:",error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch leads"
+        });
+    }
+};
+
 module.exports = {
-    createLead
+    createLead,
+    getAllLeads
 };
