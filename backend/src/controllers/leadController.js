@@ -19,7 +19,7 @@ const createLead = async (req,res) => {
     }
 };
 
-const getAllLeads = async (req, res) => {
+const getAllLeads = async (req, res, next) => {
     try {
         const {
             status,
@@ -40,12 +40,7 @@ const getAllLeads = async (req, res) => {
             data: result
         });
     } catch (error) {
-        console.error("Get leads error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch leads"
-        });
+        next(error);
     }
 };
 
