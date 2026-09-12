@@ -1,0 +1,13 @@
+const BUSINESS_TIMEZONE = "America/New_York";
+
+const BUSINESS_START_HOUR = 9;
+const BUSINESS_END_HOUR = 17;
+
+const SLOT_DURATION_HOURS = 1;
+
+module.exports = {
+    BUSINESS_TIMEZONE,
+    BUSINESS_START_HOUR,
+    BUSINESS_END_HOUR,
+    SLOT_DURATION_HOURS
+};

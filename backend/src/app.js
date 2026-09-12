@@ -1,11 +1,14 @@
 const express = require("express");
 const cors = require("cors");
-const errorHandler = require("./middleware/errorHandler");
+
 const healthRoutes = require("./routes/healthRoutes");
 const leadRoutes = require("./routes/leadRoutes");
 const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoute");
+const appointmentRoutes = require("./routes/appointmentRoutes");
 
+
+const errorHandler = require("./middleware/errorHandler");
 const app = express();
 
 app.use(cors());
@@ -22,6 +25,7 @@ app.use("/api/health", healthRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/appointments", appointmentRoutes);
 
 app.use(errorHandler);
 module.exports = app;
