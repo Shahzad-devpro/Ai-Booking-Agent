@@ -20,15 +20,27 @@ const createLead = async (req,res) => {
 };
 
 const getAllLeads = async (req, res) => {
-    try{
-        const leads = await leadService.getAllLeads();
+    try {
+        const {
+            status,
+            urgency,
+            page = "1",
+            limit = "10"
+        } = req.query;
+
+        const result = await leadService.getAllLeads({
+            status,
+            urgency,
+            page: Number(page),
+            limit: Number(limit)
+        });
 
         res.status(200).json({
             success: true,
-            data: leads
+            data: result
         });
-    } catch(error){
-        console.error("Get leads error:",error);
+    } catch (error) {
+        console.error("Get leads error:", error);
 
         res.status(500).json({
             success: false,

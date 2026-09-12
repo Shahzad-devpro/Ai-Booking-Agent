@@ -34,17 +34,49 @@ const createLead = async (leadData) => {
     return lead;
 };
 
-const getAllLeads = async() => {
-    const leads = await prisma.lead.findMany({
-        include: {
-            customer: true
-        },
-        orderBy: {
-            createdAt: "desc"
-        }
-    });
+const getAllLeads = async ({
+    status,
+    urgency,
+    page = 1,
+    limit = 10
+}) => {
+    const skip = (page - 1) * limit;
 
-    return leads;
+    const where = {};
+
+    if (status) {
+        where.status = status;
+    }
+
+    if (urgency) {
+        where.urgency = urgency;
+    }
+
+    const [leads, total] = await Promise.all([
+        prisma.lead.findMany({
+            where,
+            include: {
+                customer: true
+            },
+            orderBy: {
+                createdAt: "desc"
+            },
+            skip,
+            take: limit
+        }),
+
+        prisma.lead.count({
+            where
+        })
+    ]);
+
+    return {
+        leads,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+    };
 };
 
 const getLeadById = async (id) => {
