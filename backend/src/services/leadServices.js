@@ -55,10 +55,18 @@ const getLeadById = async (id) => {
 
     return lead;
 };
-
+const updateLeadStatus = async (id, status) => {
+    const lead = await prisma.lead.update({
+        where: { id },
+        data: {status},
+        include: {customer: true}
+    });
+    return lead;
+}
 
 module.exports = {
     createLead,
     getAllLeads,
-    getLeadById
+    getLeadById,
+    updateLeadStatus
 };

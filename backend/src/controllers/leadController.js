@@ -61,8 +61,29 @@ const getLeadById = async (req,res) => {
     }
 };
 
+const updateLeadStatus = async(req, res) => {
+    try{
+        const{status} = req.body;
+        const lead = await leadService.updateLeadStatus(req.params.id, status);
+        res.status(200).json({
+            success: true,
+            message: "Lead status updated successfully",
+            data: lead
+        });
+    } catch(error){
+        console.log("Update lead status error:",error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to upload the lead status"
+        });
+    }
+
+};
+
 module.exports = {
     createLead,
     getAllLeads,
-    getLeadById
+    getLeadById,
+    updateLeadStatus
 };
