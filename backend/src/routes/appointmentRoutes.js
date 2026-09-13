@@ -5,7 +5,8 @@ const {
     createAppointment,
     getAllAppointments,
     getAppointmentById,
-    cancelAppointment
+    cancelAppointment,
+    rescheduleAppointmentController
 } = require("../controllers/appointmentController");
 
 const authMiddleware = require("../middleware/authMiddleware");
@@ -36,6 +37,12 @@ router.patch(
     "/:id/cancel",
     authMiddleware,
     cancelAppointment
+);
+
+router.patch(
+    "/:id/reschedule",
+    authMiddleware,
+    rescheduleAppointmentController
 );
 
 module.exports = router;

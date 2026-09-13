@@ -111,6 +111,40 @@ const validateExtractedLeadData = (data) => {
     return data;
 };
 
+const getLeadQualification = (data) => {
+    const missingFields = [];
+
+    if (!data.customer.name) {
+        missingFields.push("name");
+    }
+
+    if (!data.customer.phone) {
+        missingFields.push("phone");
+    }
+
+    if (!data.customer.address) {
+        missingFields.push("address");
+    }
+
+    if (!data.service) {
+        missingFields.push("service");
+    }
+
+    if (!data.problemDescription) {
+        missingFields.push("problemDescription");
+    }
+
+    if (!data.urgency) {
+        missingFields.push("urgency");
+    }
+
+    return {
+        qualified: missingFields.length === 0,
+        missingFields
+    };
+};
+
 module.exports = {
-    validateExtractedLeadData
+    validateExtractedLeadData,
+    getLeadQualification
 };

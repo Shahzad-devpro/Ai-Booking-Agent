@@ -1,6 +1,8 @@
 const availabilityService = require("../services/availabilityService");
 const appointmentService = require("../services/appointmentService");
-
+const {
+    rescheduleAppointment
+} = require("../services/appointmentService");
 
 const getAvailableSlots = async (req, res, next) => {
     try {
@@ -100,10 +102,36 @@ const cancelAppointment = async (req, res, next) => {
     }
 };
 
+const rescheduleAppointmentController = async (req, res, next) => {
+
+    try {
+
+        const appointment =
+            await rescheduleAppointment({
+                appointmentId: req.params.id,
+                startTime: req.body.startTime,
+                endTime: req.body.endTime
+            });
+
+
+        res.status(200).json({
+            success: true,
+            message: "Appointment rescheduled successfully",
+            data: appointment
+        });
+
+    } catch (error) {
+
+        next(error);
+
+    }
+};
+
 module.exports = {
     getAvailableSlots,
     createAppointment,
     getAllAppointments,
     getAppointmentById,
-    cancelAppointment
+    cancelAppointment,
+    rescheduleAppointmentController
 };

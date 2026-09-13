@@ -34,6 +34,81 @@ const createLead = async (leadData) => {
     return lead;
 };
 
+const createLeadFromConversation = async ({
+    conversationId,
+    leadData
+}) => {
+
+    return prisma.$transaction(async (tx) => {
+
+        const conversation =
+            await tx.conversation.findUnique({
+                where: {
+                    id: conversationId
+                }
+            });
+
+        if (!conversation) {
+            const error = new Error(
+                "Conversation not found"
+            );
+
+            error.statusCode = 404;
+            throw error;
+        }
+
+        // Prevent duplicate lead creation
+        if (conversation.leadId) {
+            const existingLead =
+                await tx.lead.findUnique({
+                    where: {
+                        id: conversation.leadId
+                    },
+                    include: {
+                        customer: true
+                    }
+                });
+
+            return existingLead;
+        }
+
+        const customer =
+            await tx.customer.create({
+                data: {
+                    name: leadData.customer.name,
+                    phone: leadData.customer.phone,
+                    email: leadData.customer.email,
+                    address: leadData.customer.address
+                }
+            });
+
+        const lead =
+            await tx.lead.create({
+                data: {
+                    customerId: customer.id,
+                    service: leadData.service,
+                    problemDescription:
+                        leadData.problemDescription,
+                    urgency: leadData.urgency,
+                    status: "AI_QUALIFIED"
+                },
+                include: {
+                    customer: true
+                }
+            });
+
+        await tx.conversation.update({
+            where: {
+                id: conversationId
+            },
+            data: {
+                leadId: lead.id
+            }
+        });
+
+        return lead;
+    });
+};
 const getAllLeads = async ({
     status,
     urgency,
@@ -96,8 +171,10 @@ const updateLeadStatus = async (id, status) => {
     return lead;
 }
 
+
 module.exports = {
     createLead,
+    createLeadFromConversation,
     getAllLeads,
     getLeadById,
     updateLeadStatus
