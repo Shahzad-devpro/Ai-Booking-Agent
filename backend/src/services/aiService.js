@@ -4,26 +4,25 @@ const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY
 });
 
+const generateAIResponse = async (conversationMessages) => {
 
-const generateAIResponse = async (userMessage) => {
-
-    if (!userMessage || !userMessage.trim()) {
+    if (
+        !conversationMessages ||
+        !Array.isArray(conversationMessages) ||
+        conversationMessages.length === 0
+    ) {
         const error = new Error(
-            "User message is required"
+            "Conversation messages are required"
         );
 
         error.statusCode = 400;
         throw error;
     }
 
-
-    const completion = await groq.chat.completions.create({
-        model: "openai/gpt-oss-20b",
-
-        messages: [
-            {
-                role: "system",
-                content: `
+    const messages = [
+        {
+            role: "system",
+            content: `
 You are an AI receptionist for a fictional HVAC company.
 
 Your job is to help customers with:
@@ -42,22 +41,25 @@ Important rules:
 - If a customer describes an emergency, prioritize safety.
 - Ask relevant follow-up questions when information is missing.
 `
-            },
+        },
 
-            {
-                role: "user",
-                content: userMessage
-            }
-        ],
+        ...conversationMessages.map((message) => ({
+            role: message.role.toLowerCase(),
+            content: message.content
+        }))
+    ];
+
+    const completion = await groq.chat.completions.create({
+        model: "openai/gpt-oss-20b",
+
+        messages,
 
         temperature: 0.3,
         max_tokens: 500
     });
 
-
     const response =
         completion.choices[0]?.message?.content;
-
 
     if (!response) {
         const error = new Error(
@@ -68,10 +70,8 @@ Important rules:
         throw error;
     }
 
-
     return response;
 };
-
 
 module.exports = {
     generateAIResponse

@@ -108,10 +108,10 @@ model Appointment {
 }
 
 model Conversation {
-  id     String @id @default(cuid())
-  leadId String @unique
+  id     String  @id @default(cuid())
+  leadId String? @unique
 
-  lead     Lead      @relation(fields: [leadId], references: [id])
+  lead     Lead?     @relation(fields: [leadId], references: [id])
   messages Message[]
 
   createdAt DateTime @default(now())
