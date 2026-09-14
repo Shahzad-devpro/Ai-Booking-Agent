@@ -10,6 +10,9 @@ const leadServices =
 const appointmentService =
     require("../services/appointmentService");
 
+const appointmentLookupService =
+    require("../services/appointmentLookupService");
+
 const {
     validateExtractedLeadData,
     getLeadQualification
@@ -22,6 +25,14 @@ const {
 const {
     getBookingIntent
 } = require("../services/bookingIntentService");
+
+const {
+    getCancellationIntent
+} = require("../services/cancellationIntentService");
+
+const {
+    getRescheduleIntent
+} = require("../services/rescheduleIntentService");
 
 const {
     checkRequestedSlot
@@ -191,6 +202,39 @@ const chat = async (req, res, next) => {
             });
 
 
+        // ----------------------------------------------------
+        // 9. Determine cancellation intent
+        // ----------------------------------------------------
+
+        const cancellationIntent =
+            getCancellationIntent({
+
+                customerMessage:
+                    currentMessage
+
+            });
+
+
+        // ----------------------------------------------------
+        // 10. Determine reschedule intent
+        // ----------------------------------------------------
+
+        const rescheduleIntent =
+    getRescheduleIntent({
+
+        customerMessage:
+            currentMessage,
+
+        conversationMessages:
+            conversation.messages
+
+    });
+
+
+        // ----------------------------------------------------
+        // Debug logs
+        // ----------------------------------------------------
+        
         console.log(
             "VALIDATED AI DATA:"
         );
@@ -230,8 +274,58 @@ const chat = async (req, res, next) => {
         );
 
 
+        console.log(
+            "CANCELLATION INTENT:"
+        );
+
+        console.log(
+            JSON.stringify(
+                cancellationIntent,
+                null,
+                2
+            )
+        );
+
+
+        console.log(
+            "RESCHEDULE INTENT:"
+        );
+
+        console.log(
+            JSON.stringify(
+                rescheduleIntent,
+                null,
+                2
+            )
+        );
+        console.log(
+    "CURRENT CUSTOMER MESSAGE:"
+);
+
+console.log(
+    currentMessage
+);
+
+console.log(
+    "RESCHEDULE CONTEXT MESSAGE:"
+);
+
+const lastAssistantMessage =
+    [...conversation.messages]
+        .reverse()
+        .find(
+            message =>
+                message.role === "ASSISTANT"
+        );
+
+console.log(
+    lastAssistantMessage
+        ? lastAssistantMessage.content
+        : "No previous assistant message"
+);
+
         // ----------------------------------------------------
-        // 9. Determine qualification
+        // 11. Determine qualification
         // ----------------------------------------------------
 
         const qualification =
@@ -241,27 +335,144 @@ const chat = async (req, res, next) => {
 
 
         // ----------------------------------------------------
-        // 10. Create/retrieve lead when qualified
+        // 12. Resolve existing lead
         // ----------------------------------------------------
         //
-        // IMPORTANT:
+        // Priority:
         //
-        // createLeadFromConversation() already prevents
-        // duplicate lead creation using conversation.leadId.
+        // 1. conversation.leadId
         //
-        // Therefore:
+        // 2. Customer phone for existing appointment
         //
-        // First qualified message → creates lead
-        //
-        // Later booking message → returns SAME lead
+        // This allows customers to reschedule from a new
+        // conversation without repeating all their details.
         //
         // ----------------------------------------------------
 
         let lead = null;
 
+        let existingAppointment = null;
+
+
+        // ----------------------------------------------------
+        // 12A. Existing conversation lead
+        // ----------------------------------------------------
 
         if (
-            qualification.qualified
+            conversation.leadId
+        ) {
+
+            lead =
+                await leadServices
+                    .getLeadById(
+                        conversation.leadId
+                    );
+
+        }
+
+
+        // ----------------------------------------------------
+        // 12B. Existing appointment lookup by phone
+        // ----------------------------------------------------
+        //
+        // Only needed for cancellation/rescheduling when
+        // the current conversation has no leadId.
+        //
+        // ----------------------------------------------------
+
+        if (
+            !lead &&
+            (
+                cancellationIntent.wantsCancellation ||
+                rescheduleIntent.wantsReschedule
+            )
+        ) {
+
+            const customerPhone =
+                validatedData.customer?.phone;
+
+
+            if (customerPhone) {
+
+                existingAppointment =
+                    await appointmentLookupService
+                        .getBookedAppointmentByCustomerPhone(
+                            customerPhone
+                        );
+
+
+                if (
+                    existingAppointment
+                ) {
+
+                    lead =
+                        existingAppointment.lead;
+
+                }
+
+            }
+
+        }
+
+
+        // ----------------------------------------------------
+        // 12C. Debug existing appointment lookup
+        // ----------------------------------------------------
+
+        if (
+            cancellationIntent.wantsCancellation ||
+            rescheduleIntent.wantsReschedule
+        ) {
+
+            console.log(
+                "EXISTING APPOINTMENT LOOKUP:"
+            );
+
+            console.log(
+
+                existingAppointment
+                    ? JSON.stringify(
+                        {
+                            appointmentId:
+                                existingAppointment.id,
+
+                            leadId:
+                                existingAppointment.leadId,
+
+                            customerId:
+                                existingAppointment.customerId,
+
+                            customerPhone:
+                                existingAppointment.customer?.phone,
+
+                            status:
+                                existingAppointment.status
+
+                        },
+                        null,
+                        2
+                    )
+                    : "No appointment found"
+
+            );
+
+        }
+
+
+        // ----------------------------------------------------
+        // 13. Create/retrieve lead when fully qualified
+        // ----------------------------------------------------
+        //
+        // Do NOT replace an existing lead.
+        //
+        // createLeadFromConversation() already prevents
+        // duplicate lead creation for the same conversation.
+        //
+        // ----------------------------------------------------
+
+        if (
+            qualification.qualified &&
+            !lead
         ) {
 
             lead =
@@ -280,49 +491,73 @@ const chat = async (req, res, next) => {
 
 
         // ====================================================
-        // 11. BOOKING CONFIRMATION FLOW
-        // ====================================================
-        //
-        // This must happen BEFORE normal availability
-        // response generation.
-        //
-        // Otherwise:
-        //
-        // "Yes, book it"
-        //
-        // could accidentally produce another
-        // "Would you like me to book it?"
-        //
+        // 14. CANCELLATION FLOW
         // ====================================================
 
         if (
-            bookingIntent.readyForBooking
+            cancellationIntent.wantsCancellation
         ) {
 
+            // ------------------------------------------------
+            // 14A. Find appointment if it wasn't found yet
+            // ------------------------------------------------
+
+            if (
+                !existingAppointment &&
+                lead
+            ) {
+
+                existingAppointment =
+                    await appointmentService
+                        .getBookedAppointmentByLeadId(
+                            lead.id
+                        );
+
+            }
+
 
             // ------------------------------------------------
-            // 11A. Make sure a qualified lead exists
+            // 14B. No appointment found
             // ------------------------------------------------
 
-            if (!lead) {
+            if (
+                !existingAppointment
+            ) {
 
-                return res.status(400).json({
+                const cancellationResponse =
+                    "I couldn't find a currently booked appointment for you. Please make sure you're using the phone number associated with your appointment.";
 
-                    success: false,
 
-                    message:
-                        "The appointment cannot be booked because the customer information is incomplete.",
+                await conversationService.addMessage(
+
+                    conversation.id,
+
+                    "ASSISTANT",
+
+                    cancellationResponse
+
+                );
+
+
+                return res.status(200).json({
+
+                    success: true,
 
                     data: {
 
                         conversationId:
                             conversation.id,
 
+                        message:
+                            cancellationResponse,
+
                         qualification,
 
-                        appointmentIntent,
+                        cancellationIntent,
 
-                        bookingIntent
+                        rescheduleIntent,
+
+                        lead
 
                     }
 
@@ -332,19 +567,667 @@ const chat = async (req, res, next) => {
 
 
             // ------------------------------------------------
-            // 11B. Re-check availability
+            // 14C. Cancel appointment
             // ------------------------------------------------
-            //
-            // VERY IMPORTANT:
-            //
-            // Availability shown to customer earlier may now
-            // be stale.
-            //
-            // Another customer could have booked the slot.
-            //
-            // Therefore we ALWAYS check again immediately
-            // before creating the appointment.
-            //
+
+            const cancelledAppointment =
+                await appointmentService
+                    .cancelAppointment(
+                        existingAppointment.id
+                    );
+
+
+            // ------------------------------------------------
+            // 14D. Deterministic cancellation confirmation
+            // ------------------------------------------------
+
+            const cancelledStart =
+                DateTime.fromJSDate(
+                    cancelledAppointment.startTime
+                ).setZone(
+                    BUSINESS_TIMEZONE
+                );
+
+
+            const cancelledEnd =
+                DateTime.fromJSDate(
+                    cancelledAppointment.endTime
+                ).setZone(
+                    BUSINESS_TIMEZONE
+                );
+
+
+            const cancellationConfirmation =
+                `Your appointment has been cancelled successfully. It was scheduled for ${cancelledStart.toFormat("MMMM d, yyyy")} from ${cancelledStart.toFormat("h:mm a")} to ${cancelledEnd.toFormat("h:mm a")}. Your appointment ID is ${cancelledAppointment.id}.`;
+
+
+            await conversationService.addMessage(
+
+                conversation.id,
+
+                "ASSISTANT",
+
+                cancellationConfirmation
+
+            );
+
+
+            conversation =
+                await conversationService
+                    .getConversationById(
+                        conversation.id
+                    );
+
+
+            return res.status(200).json({
+
+                success: true,
+
+                data: {
+
+                    conversationId:
+                        conversation.id,
+
+                    message:
+                        cancellationConfirmation,
+
+                    qualification,
+
+                    cancellationIntent,
+
+                    rescheduleIntent,
+
+                    lead:
+                        cancelledAppointment.lead,
+
+                    appointment:
+                        cancelledAppointment
+
+                }
+
+            });
+
+        }
+
+
+        // ====================================================
+        // 15. RESCHEDULE FLOW
+        // ====================================================
+
+        if (
+            rescheduleIntent.wantsReschedule
+        ) {
+
+            // ------------------------------------------------
+            // 15A. Find existing appointment by lead if
+            //     phone lookup didn't already find it
+            // ------------------------------------------------
+
+            if (
+                !existingAppointment &&
+                lead
+            ) {
+
+                existingAppointment =
+                    await appointmentService
+                        .getBookedAppointmentByLeadId(
+                            lead.id
+                        );
+
+            }
+
+
+            // ------------------------------------------------
+            // 15B. No existing appointment
+            // ------------------------------------------------
+
+            if (
+                !existingAppointment
+            ) {
+
+                const noAppointmentResponse =
+                    "I couldn't find a currently booked appointment for you to reschedule. Please provide the phone number associated with your appointment.";
+
+
+                await conversationService.addMessage(
+
+                    conversation.id,
+
+                    "ASSISTANT",
+
+                    noAppointmentResponse
+
+                );
+
+
+                return res.status(200).json({
+
+                    success: true,
+
+                    data: {
+
+                        conversationId:
+                            conversation.id,
+
+                        message:
+                            noAppointmentResponse,
+
+                        qualification,
+
+                        appointmentIntent,
+
+                        bookingIntent,
+
+                        cancellationIntent,
+
+                        rescheduleIntent,
+
+                        lead: null
+
+                    }
+
+                });
+
+            }
+
+
+            // ------------------------------------------------
+            // 15C. New date/time required
+            // ------------------------------------------------
+
+            if (
+                !validatedData.preferredDate ||
+                !validatedData.preferredTime
+            ) {
+
+                const missingDateTimeResponse =
+                    "Sure, I can help reschedule your appointment. What date and time would you like instead?";
+
+
+                await conversationService.addMessage(
+
+                    conversation.id,
+
+                    "ASSISTANT",
+
+                    missingDateTimeResponse
+
+                );
+
+
+                return res.status(200).json({
+
+                    success: true,
+
+                    data: {
+
+                        conversationId:
+                            conversation.id,
+
+                        message:
+                            missingDateTimeResponse,
+
+                        qualification,
+
+                        appointmentIntent,
+
+                        bookingIntent,
+
+                        cancellationIntent,
+
+                        rescheduleIntent,
+
+                        lead,
+
+                        appointment:
+                            existingAppointment
+
+                    }
+
+                });
+
+            }
+
+
+            // ------------------------------------------------
+            // 15D. Check requested new slot
+            // ------------------------------------------------
+
+            const rescheduleAvailability =
+                await checkRequestedSlot({
+
+                    preferredDate:
+                        validatedData.preferredDate,
+
+                    preferredTime:
+                        validatedData.preferredTime,
+
+                    excludeAppointmentId:
+                        existingAppointment.id
+
+                });
+
+
+            console.log(
+                "RESCHEDULE AVAILABILITY:"
+            );
+
+            console.log(
+                JSON.stringify(
+                    rescheduleAvailability,
+                    null,
+                    2
+                )
+            );
+
+
+            // ------------------------------------------------
+            // 15E. Requested slot unavailable
+            // ------------------------------------------------
+
+            if (
+                !rescheduleAvailability.available
+            ) {
+
+                const aiResponse =
+                    await aiService
+                        .generateAvailabilityResponse({
+
+                            conversationMessages:
+                                conversation.messages,
+
+                            availability:
+                                rescheduleAvailability,
+
+                            preferredDate:
+                                validatedData.preferredDate,
+
+                            preferredTime:
+                                validatedData.preferredTime
+
+                        });
+
+
+                if (
+                    !aiResponse ||
+                    typeof aiResponse !== "string" ||
+                    aiResponse.trim().length === 0
+                ) {
+
+                    const error =
+                        new Error(
+                            "AI failed to generate reschedule availability response"
+                        );
+
+                    error.statusCode = 502;
+
+                    throw error;
+
+                }
+
+
+                await conversationService.addMessage(
+
+                    conversation.id,
+
+                    "ASSISTANT",
+
+                    aiResponse.trim()
+
+                );
+
+
+                return res.status(200).json({
+
+                    success: true,
+
+                    data: {
+
+                        conversationId:
+                            conversation.id,
+
+                        message:
+                            aiResponse.trim(),
+
+                        qualification,
+
+                        appointmentIntent,
+
+                        bookingIntent,
+
+                        cancellationIntent,
+
+                        rescheduleIntent,
+
+                        availability:
+                            rescheduleAvailability,
+
+                        lead,
+
+                        appointment:
+                            existingAppointment
+
+                    }
+
+                });
+
+            }
+
+
+            // ------------------------------------------------
+            // 15F. Build new appointment start/end
+            // ------------------------------------------------
+
+            const rescheduleStart =
+                DateTime.fromISO(
+
+                    `${validatedData.preferredDate}T${validatedData.preferredTime}`,
+
+                    {
+                        zone:
+                            BUSINESS_TIMEZONE
+                    }
+
+                );
+
+
+            if (
+                !rescheduleStart.isValid
+            ) {
+
+                const error =
+                    new Error(
+                        "Unable to create a valid rescheduled appointment time"
+                    );
+
+                error.statusCode = 400;
+
+                throw error;
+
+            }
+
+
+            const rescheduleEnd =
+                rescheduleStart.plus({
+
+                    hours:
+                        SLOT_DURATION_HOURS
+
+                });
+
+
+            // ------------------------------------------------
+            // 15G. Reschedule appointment
+            // ------------------------------------------------
+
+            let rescheduledAppointment;
+
+
+            try {
+
+                rescheduledAppointment =
+                    await appointmentService
+                        .rescheduleAppointment({
+
+                            appointmentId:
+                                existingAppointment.id,
+
+                            startTime:
+                                rescheduleStart.toISO(),
+
+                            endTime:
+                                rescheduleEnd.toISO()
+
+                        });
+
+            } catch (rescheduleError) {
+
+                // --------------------------------------------
+                // Slot became unavailable
+                // --------------------------------------------
+
+                if (
+                    rescheduleError.statusCode === 409
+                ) {
+
+                    const latestAvailability =
+                        await checkRequestedSlot({
+
+                            preferredDate:
+                                validatedData.preferredDate,
+
+                            preferredTime:
+                                validatedData.preferredTime,
+
+                            excludeAppointmentId:
+                                existingAppointment.id
+
+                        });
+
+
+                    const aiResponse =
+                        await aiService
+                            .generateAvailabilityResponse({
+
+                                conversationMessages:
+                                    conversation.messages,
+
+                                availability:
+                                    latestAvailability,
+
+                                preferredDate:
+                                    validatedData.preferredDate,
+
+                                preferredTime:
+                                    validatedData.preferredTime
+
+                            });
+
+
+                    await conversationService.addMessage(
+
+                        conversation.id,
+
+                        "ASSISTANT",
+
+                        aiResponse.trim()
+
+                    );
+
+
+                    return res.status(200).json({
+
+                        success: true,
+
+                        data: {
+
+                            conversationId:
+                                conversation.id,
+
+                            message:
+                                aiResponse.trim(),
+
+                            qualification,
+
+                            appointmentIntent,
+
+                            bookingIntent,
+
+                            cancellationIntent,
+
+                            rescheduleIntent,
+
+                            availability:
+                                latestAvailability,
+
+                            lead,
+
+                            appointment:
+                                existingAppointment
+
+                        }
+
+                    });
+
+                }
+
+
+                throw rescheduleError;
+
+            }
+
+
+            // ------------------------------------------------
+            // 15H. Deterministic reschedule confirmation
+            // ------------------------------------------------
+
+            const updatedStart =
+                DateTime.fromJSDate(
+                    rescheduledAppointment.startTime
+                ).setZone(
+                    BUSINESS_TIMEZONE
+                );
+
+
+            const updatedEnd =
+                DateTime.fromJSDate(
+                    rescheduledAppointment.endTime
+                ).setZone(
+                    BUSINESS_TIMEZONE
+                );
+
+
+            const technicianName =
+                rescheduledAppointment
+                    .technician?.name ||
+                "our technician";
+
+
+            const rescheduleConfirmation =
+                `Your appointment has been rescheduled successfully to ${updatedStart.toFormat("MMMM d, yyyy")} from ${updatedStart.toFormat("h:mm a")} to ${updatedEnd.toFormat("h:mm a")}. ${technicianName} has been assigned to your appointment. Your appointment ID is ${rescheduledAppointment.id}.`;
+
+
+            await conversationService.addMessage(
+
+                conversation.id,
+
+                "ASSISTANT",
+
+                rescheduleConfirmation
+
+            );
+
+
+            conversation =
+                await conversationService
+                    .getConversationById(
+                        conversation.id
+                    );
+
+
+            return res.status(200).json({
+
+                success: true,
+
+                data: {
+
+                    conversationId:
+                        conversation.id,
+
+                    message:
+                        rescheduleConfirmation,
+
+                    qualification,
+
+                    appointmentIntent,
+
+                    bookingIntent,
+
+                    cancellationIntent,
+
+                    rescheduleIntent,
+
+                    availability:
+                        rescheduleAvailability,
+
+                    lead:
+                        rescheduledAppointment.lead,
+
+                    appointment:
+                        rescheduledAppointment
+
+                }
+
+            });
+
+        }
+
+
+        // ====================================================
+        // 16. NEW BOOKING CONFIRMATION FLOW
+        // ====================================================
+
+        if (
+            bookingIntent.readyForBooking
+        ) {
+
+            // ------------------------------------------------
+            // 16A. Qualified lead is mandatory
+            // ------------------------------------------------
+
+            if (
+                !lead ||
+                !qualification.qualified
+            ) {
+
+                const missingInformationResponse =
+                    "Before I can book the appointment, I need to collect the remaining customer information. Please provide the requested details first.";
+
+
+                await conversationService.addMessage(
+
+                    conversation.id,
+
+                    "ASSISTANT",
+
+                    missingInformationResponse
+
+                );
+
+
+                return res.status(200).json({
+
+                    success: true,
+
+                    data: {
+
+                        conversationId:
+                            conversation.id,
+
+                        message:
+                            missingInformationResponse,
+
+                        qualification,
+
+                        appointmentIntent,
+
+                        bookingIntent,
+
+                        cancellationIntent,
+
+                        rescheduleIntent,
+
+                        lead
+
+                    }
+
+                });
+
+            }
+
+
+            // ------------------------------------------------
+            // 16B. Re-check availability
             // ------------------------------------------------
 
             const bookingAvailability =
@@ -373,7 +1256,7 @@ const chat = async (req, res, next) => {
 
 
             // ------------------------------------------------
-            // 11C. Slot became unavailable
+            // 16C. Slot unavailable
             // ------------------------------------------------
 
             if (
@@ -446,6 +1329,10 @@ const chat = async (req, res, next) => {
 
                         bookingIntent,
 
+                        cancellationIntent,
+
+                        rescheduleIntent,
+
                         availability:
                             bookingAvailability,
 
@@ -459,19 +1346,25 @@ const chat = async (req, res, next) => {
 
 
             // ------------------------------------------------
-            // 11D. Build appointment start/end times
+            // 16D. Build appointment times
             // ------------------------------------------------
 
             const start =
                 DateTime.fromISO(
+
                     `${validatedData.preferredDate}T${validatedData.preferredTime}`,
+
                     {
-                        zone: BUSINESS_TIMEZONE
+                        zone:
+                            BUSINESS_TIMEZONE
                     }
+
                 );
 
 
-            if (!start.isValid) {
+            if (
+                !start.isValid
+            ) {
 
                 const error =
                     new Error(
@@ -487,20 +1380,15 @@ const chat = async (req, res, next) => {
 
             const end =
                 start.plus({
+
                     hours:
                         SLOT_DURATION_HOURS
+
                 });
 
 
             // ------------------------------------------------
-            // 11E. Create appointment
-            // ------------------------------------------------
-            //
-            // appointmentService performs the final backend
-            // validation and technician assignment.
-            //
-            // We DO NOT trust AI for booking.
-            //
+            // 16E. Create appointment
             // ------------------------------------------------
 
             let appointment;
@@ -530,14 +1418,6 @@ const chat = async (req, res, next) => {
                         });
 
             } catch (bookingError) {
-
-                // --------------------------------------------
-                // Handle race condition:
-                //
-                // Availability was true a moment ago, but
-                // another customer may have booked the final
-                // technician before createAppointment().
-                // --------------------------------------------
 
                 if (
                     bookingError.statusCode === 409
@@ -603,6 +1483,10 @@ const chat = async (req, res, next) => {
 
                             bookingIntent,
 
+                            cancellationIntent,
+
+                            rescheduleIntent,
+
                             availability:
                                 latestAvailability,
 
@@ -621,16 +1505,7 @@ const chat = async (req, res, next) => {
 
 
             // ------------------------------------------------
-            // 11F. Generate deterministic booking confirmation
-            // ------------------------------------------------
-            //
-            // IMPORTANT:
-            //
-            // Do NOT ask the LLM whether the appointment was
-            // booked.
-            //
-            // appointmentService already proved it.
-            //
+            // 16F. Deterministic booking confirmation
             // ------------------------------------------------
 
             const formattedDate =
@@ -638,10 +1513,12 @@ const chat = async (req, res, next) => {
                     "MMMM d, yyyy"
                 );
 
+
             const formattedStartTime =
                 start.toFormat(
                     "h:mm a"
                 );
+
 
             const formattedEndTime =
                 end.toFormat(
@@ -658,10 +1535,6 @@ const chat = async (req, res, next) => {
                 `You're all set, ${lead.customer.name}. Your appointment is booked for ${formattedDate} from ${formattedStartTime} to ${formattedEndTime}. ${technicianName} has been assigned to your appointment. Your appointment ID is ${appointment.id}.`;
 
 
-            // ------------------------------------------------
-            // 11G. Save booking confirmation
-            // ------------------------------------------------
-
             await conversationService.addMessage(
 
                 conversation.id,
@@ -673,20 +1546,12 @@ const chat = async (req, res, next) => {
             );
 
 
-            // ------------------------------------------------
-            // 11H. Reload conversation
-            // ------------------------------------------------
-
             conversation =
                 await conversationService
                     .getConversationById(
                         conversation.id
                     );
 
-
-            // ------------------------------------------------
-            // 11I. Return successful booking
-            // ------------------------------------------------
 
             return res.status(200).json({
 
@@ -706,6 +1571,10 @@ const chat = async (req, res, next) => {
 
                     bookingIntent,
 
+                    cancellationIntent,
+
+                    rescheduleIntent,
+
                     availability:
                         bookingAvailability,
 
@@ -722,7 +1591,7 @@ const chat = async (req, res, next) => {
 
 
         // ====================================================
-        // 12. NORMAL AVAILABILITY FLOW
+        // 17. NORMAL AVAILABILITY FLOW
         // ====================================================
 
         let availability = null;
@@ -760,14 +1629,15 @@ const chat = async (req, res, next) => {
 
 
         // ====================================================
-        // 13. Generate normal AI response
+        // 18. Generate normal AI response
         // ====================================================
 
         let aiResponse;
 
 
         if (
-            appointmentIntent.readyForAvailabilityCheck
+            appointmentIntent.readyForAvailabilityCheck &&
+            qualification.qualified
         ) {
 
             aiResponse =
@@ -799,7 +1669,7 @@ const chat = async (req, res, next) => {
 
 
         // ----------------------------------------------------
-        // 14. Validate AI response
+        // 19. Validate AI response
         // ----------------------------------------------------
 
         if (
@@ -821,7 +1691,7 @@ const chat = async (req, res, next) => {
 
 
         // ----------------------------------------------------
-        // 15. Save AI response
+        // 20. Save AI response
         // ----------------------------------------------------
 
         await conversationService.addMessage(
@@ -836,7 +1706,7 @@ const chat = async (req, res, next) => {
 
 
         // ----------------------------------------------------
-        // 16. Reload conversation
+        // 21. Reload conversation
         // ----------------------------------------------------
 
         conversation =
@@ -847,7 +1717,7 @@ const chat = async (req, res, next) => {
 
 
         // ----------------------------------------------------
-        // 17. Return normal response
+        // 22. Return normal response
         // ----------------------------------------------------
 
         return res.status(200).json({
@@ -867,6 +1737,10 @@ const chat = async (req, res, next) => {
                 appointmentIntent,
 
                 bookingIntent,
+
+                cancellationIntent,
+
+                rescheduleIntent,
 
                 availability,
 

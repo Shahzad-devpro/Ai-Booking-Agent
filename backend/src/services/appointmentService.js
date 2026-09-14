@@ -551,6 +551,45 @@ const getAppointmentById = async (id) => {
 
 /*
 |--------------------------------------------------------------------------
+| GET BOOKED APPOINTMENT BY LEAD ID
+|--------------------------------------------------------------------------
+*/
+
+const getBookedAppointmentByLeadId = async (leadId) => {
+
+    if (!leadId) {
+        const error = new Error(
+            "Lead ID is required"
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
+
+    const appointment =
+        await prisma.appointment.findFirst({
+
+            where: {
+                leadId,
+                status: "BOOKED"
+            },
+
+            include: {
+                customer: true,
+                lead: true,
+                technician: true
+            }
+
+        });
+
+
+    return appointment;
+};
+
+
+/*
+|--------------------------------------------------------------------------
 | CANCEL APPOINTMENT
 |--------------------------------------------------------------------------
 */
@@ -1041,6 +1080,7 @@ module.exports = {
     createAppointment,
     getAllAppointments,
     getAppointmentById,
+    getBookedAppointmentByLeadId,
     cancelAppointment,
     rescheduleAppointment
 };
