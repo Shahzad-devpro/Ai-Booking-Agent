@@ -1,0 +1,143 @@
+
+import {
+    CalendarCheck,
+    Check,
+    Clock3,
+    MapPin,
+    UserRound,
+} from "lucide-react";
+
+const BookingConfirmation = ({
+    date,
+    startTime,
+    endTime,
+    technician,
+    service,
+    location,
+}) => {
+    return (
+        <div className="w-full max-w-md overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">
+            {/* Success header */}
+            <div className="border-b border-emerald-100 bg-emerald-50/70 px-5 py-5">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
+                        <Check size={20} strokeWidth={2.5} />
+                    </div>
+
+                    <div>
+                        <p className="text-sm font-extrabold text-slate-950">
+                            Appointment confirmed
+                        </p>
+
+                        <p className="mt-0.5 text-xs text-emerald-600">
+                            Your service request has been scheduled.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Appointment details */}
+            <div className="space-y-4 p-5">
+                {/* Date */}
+                {date && (
+                    <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+                            <CalendarCheck size={17} />
+                        </div>
+
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Date
+                            </p>
+
+                            <p className="mt-1 text-sm font-bold text-slate-900">
+                                {date}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Time */}
+                {(startTime || endTime) && (
+                    <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+                            <Clock3 size={17} />
+                        </div>
+
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Time
+                            </p>
+
+                            <p className="mt-1 text-sm font-bold text-slate-900">
+                                {startTime}
+                                {endTime && ` – ${endTime}`}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Service */}
+                {service && (
+                    <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+                            <MapPin size={17} />
+                        </div>
+
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Service
+                            </p>
+
+                            <p className="mt-1 break-words text-sm font-bold text-slate-900">
+                                {service}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Technician */}
+                {technician && (
+                    <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+                            <UserRound size={17} />
+                        </div>
+
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Technician
+                            </p>
+
+                            <p className="mt-1 text-sm font-bold text-slate-900">
+                                {technician}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Location */}
+                {location && (
+                    <div className="rounded-xl bg-slate-50 px-3 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Service location
+                        </p>
+
+                        <p className="mt-1 break-words text-xs font-medium leading-5 text-slate-600">
+                            {location}
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-3">
+                <p className="text-center text-[10px] leading-4 text-slate-400">
+                    Please keep this confirmation for your records.
+                </p>
+            </div>
+        </div>
+    );
+};
+
+export default BookingConfirmation;
+
