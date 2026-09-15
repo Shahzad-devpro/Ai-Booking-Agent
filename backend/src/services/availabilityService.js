@@ -16,13 +16,17 @@ const getAvailableSlots = async (date) => {
         zone: BUSINESS_TIMEZONE
     });
 
+
     // -----------------------------
     // 1. Validate date
     // -----------------------------
 
     if (!requestedDate.isValid) {
+
         const error = new Error("Invalid date");
+
         error.statusCode = 400;
+
         throw error;
     }
 
@@ -42,9 +46,11 @@ const getAvailableSlots = async (date) => {
 
     const activeTechnicians =
         await prisma.technician.findMany({
+
             where: {
                 active: true
             },
+
             select: {
                 id: true,
                 name: true
@@ -62,7 +68,21 @@ const getAvailableSlots = async (date) => {
 
 
     // -----------------------------
-    // 5. Get day's appointments
+    // 5. Get current time
+    //
+    // IMPORTANT:
+    // This must use the same business
+    // timezone as appointmentService.js.
+    // -----------------------------
+
+    const now =
+        DateTime
+            .now()
+            .setZone(BUSINESS_TIMEZONE);
+
+
+    // -----------------------------
+    // 6. Get day's appointments
     // -----------------------------
 
     const startOfDay =
@@ -70,6 +90,7 @@ const getAvailableSlots = async (date) => {
             .startOf("day")
             .toUTC()
             .toJSDate();
+
 
     const endOfDay =
         requestedDate
@@ -80,7 +101,9 @@ const getAvailableSlots = async (date) => {
 
     const appointments =
         await prisma.appointment.findMany({
+
             where: {
+
                 status: "BOOKED",
 
                 startTime: {
@@ -90,6 +113,7 @@ const getAvailableSlots = async (date) => {
             },
 
             select: {
+
                 technicianId: true,
                 startTime: true,
                 endTime: true
@@ -98,7 +122,7 @@ const getAvailableSlots = async (date) => {
 
 
     // -----------------------------
-    // 6. Generate business slots
+    // 7. Generate business slots
     // -----------------------------
 
     const slots = [];
@@ -112,6 +136,7 @@ const getAvailableSlots = async (date) => {
 
         const slotStart =
             requestedDate.set({
+
                 hour,
                 minute: 0,
                 second: 0,
@@ -125,32 +150,61 @@ const getAvailableSlots = async (date) => {
             });
 
 
+        // ------------------------------------------------
+        // 8. Reject slots that have already started
+        //
+        // This is critical for TODAY.
+        //
+        // Example:
+        //
+        // Current NY time = 4:30 PM
+        //
+        // 4–5 PM → rejected
+        // 5–6 PM → potentially available
+        //
+        // For future dates, this condition is false.
+        // ------------------------------------------------
+
+        if (
+            slotStart.toMillis() <=
+            now.toMillis()
+        ) {
+            continue;
+        }
+
+
         const slotStartUTC =
             slotStart.toUTC();
+
 
         const slotEndUTC =
             slotEnd.toUTC();
 
 
         // -----------------------------
-        // 7. Find technicians already
+        // 9. Find technicians already
         //    booked during this slot
         // -----------------------------
 
         const bookedTechnicianIds =
             new Set(
+
                 appointments
                     .filter((appointment) => {
 
                         return (
+
                             appointment.technicianId &&
+
                             appointment.startTime <
                                 slotEndUTC.toJSDate() &&
+
                             appointment.endTime >
                                 slotStartUTC.toJSDate()
                         );
 
                     })
+
                     .map(
                         (appointment) =>
                             appointment.technicianId
@@ -159,7 +213,7 @@ const getAvailableSlots = async (date) => {
 
 
         // -----------------------------
-        // 8. Calculate capacity
+        // 10. Calculate capacity
         // -----------------------------
 
         const availableTechnicians =
@@ -172,7 +226,7 @@ const getAvailableSlots = async (date) => {
 
 
         // -----------------------------
-        // 9. Add slot
+        // 11. Add slot
         // -----------------------------
 
         slots.push({

@@ -10,6 +10,20 @@ const {
 
 
 // ============================================================
+// Sanitize slot for customer-facing response
+// ============================================================
+
+const sanitizeSlot = (slot) => {
+
+    return {
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        available: slot.available
+    };
+};
+
+
+// ============================================================
 // Get closest available appointment slots
 // ============================================================
 
@@ -28,6 +42,7 @@ const getClosestAvailableSlots = (
                         setZone: true
                     })
                     .setZone(BUSINESS_TIMEZONE);
+
 
             const bTime =
                 DateTime
@@ -55,7 +70,111 @@ const getClosestAvailableSlots = (
 
             return aDifference - bDifference;
         })
-        .slice(0, 3);
+        .slice(0, 3)
+        .map(sanitizeSlot);
+};
+
+
+// ============================================================
+// Get future available slots
+// ============================================================
+
+const getFutureAvailableSlots = async ({
+    requestedDateTime
+}) => {
+
+    const futureSlots = [];
+
+
+    let searchDate =
+        requestedDateTime
+            .startOf("day")
+            .plus({
+                days: 1
+            });
+
+
+    // --------------------------------------------------------
+    // Search up to 7 calendar days ahead
+    // --------------------------------------------------------
+
+    for (let day = 0; day < 7; day++) {
+
+        // ----------------------------------------------------
+        // Skip Sunday
+        // ----------------------------------------------------
+
+        if (searchDate.weekday !== 7) {
+
+            const dateString =
+                searchDate.toFormat("yyyy-MM-dd");
+
+
+            const slots =
+                await getAvailableSlots(
+                    dateString
+                );
+
+
+            const availableSlots =
+                slots.filter(
+                    (slot) =>
+                        slot.available
+                );
+
+
+            futureSlots.push(
+                ...availableSlots
+            );
+
+
+            // ------------------------------------------------
+            // Stop once enough alternatives exist
+            // ------------------------------------------------
+
+            if (futureSlots.length >= 3) {
+                break;
+            }
+        }
+
+
+        searchDate =
+            searchDate.plus({
+                days: 1
+            });
+    }
+
+
+    // --------------------------------------------------------
+    // Sort chronologically
+    // --------------------------------------------------------
+
+    return futureSlots
+        .sort((a, b) => {
+
+            const aTime =
+                DateTime
+                    .fromISO(a.startTime, {
+                        setZone: true
+                    })
+                    .setZone(BUSINESS_TIMEZONE);
+
+
+            const bTime =
+                DateTime
+                    .fromISO(b.startTime, {
+                        setZone: true
+                    })
+                    .setZone(BUSINESS_TIMEZONE);
+
+
+            return (
+                aTime.toMillis() -
+                bTime.toMillis()
+            );
+        })
+        .slice(0, 3)
+        .map(sanitizeSlot);
 };
 
 
@@ -152,35 +271,14 @@ const checkRequestedSlot = async ({
         });
 
 
-    // --------------------------------------------------------
-    // 5. Requested time is not a valid business slot
-    // --------------------------------------------------------
+    // ========================================================
+    // 5. Requested slot is available
+    // ========================================================
 
-    if (!requestedSlot) {
-
-        return {
-
-            requestedSlot: {
-                date: preferredDate,
-                time: preferredTime
-            },
-
-            available: false,
-
-            alternatives:
-                getClosestAvailableSlots(
-                    slots,
-                    requestedDateTime
-                )
-        };
-    }
-
-
-    // --------------------------------------------------------
-    // 6. Requested slot is available
-    // --------------------------------------------------------
-
-    if (requestedSlot.available) {
+    if (
+        requestedSlot &&
+        requestedSlot.available
+    ) {
 
         return {
 
@@ -196,9 +294,53 @@ const checkRequestedSlot = async ({
     }
 
 
+    // ========================================================
+    // 6. Find same-day alternatives
+    // ========================================================
+
+    const sameDayAlternatives =
+        getClosestAvailableSlots(
+            slots,
+            requestedDateTime
+        );
+
+
     // --------------------------------------------------------
-    // 7. Requested slot is unavailable
+    // Return same-day alternatives when available
     // --------------------------------------------------------
+
+    if (sameDayAlternatives.length > 0) {
+
+        return {
+
+            requestedSlot: {
+                date: preferredDate,
+                time: preferredTime
+            },
+
+            available: false,
+
+            alternatives:
+                sameDayAlternatives
+        };
+    }
+
+
+    // ========================================================
+    // 7. No same-day availability
+    //
+    // Search future business days.
+    // ========================================================
+
+    const futureAlternatives =
+        await getFutureAvailableSlots({
+            requestedDateTime
+        });
+
+
+    // ========================================================
+    // 8. Return future alternatives
+    // ========================================================
 
     return {
 
@@ -210,10 +352,7 @@ const checkRequestedSlot = async ({
         available: false,
 
         alternatives:
-            getClosestAvailableSlots(
-                slots,
-                requestedDateTime
-            )
+            futureAlternatives
     };
 };
 
@@ -225,4 +364,3 @@ const checkRequestedSlot = async ({
 module.exports = {
     checkRequestedSlot
 };
-

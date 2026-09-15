@@ -1,4 +1,5 @@
- /*
+
+/*
 |--------------------------------------------------------------------------
 | RESCHEDULE INTENT SERVICE
 |--------------------------------------------------------------------------
@@ -10,7 +11,7 @@
 | OR
 |
 | 2. Selecting an alternative time previously offered by the
-|    AI receptionist.
+|    AI receptionist DURING AN EXISTING RESCHEDULE FLOW.
 |
 | IMPORTANT:
 | This service does NOT reschedule appointments.
@@ -31,6 +32,7 @@ const getRescheduleIntent = ({
             wantsReschedule: false
         };
     }
+
 
     const normalizedMessage =
         customerMessage
@@ -86,6 +88,7 @@ const getRescheduleIntent = ({
         /\bswitch booking\b/
     ];
 
+
     const hasDirectRescheduleIntent =
         directReschedulePatterns.some(
             pattern =>
@@ -130,6 +133,7 @@ const getRescheduleIntent = ({
         /\bi'd like a different date\b/
     ];
 
+
     const hasNaturalLanguageIntent =
         naturalLanguagePatterns.some(
             pattern =>
@@ -162,6 +166,7 @@ const getRescheduleIntent = ({
         /\bchange that to\b/
     ];
 
+
     const hasReferenceIntent =
         referencePatterns.some(
             pattern =>
@@ -170,31 +175,29 @@ const getRescheduleIntent = ({
 
 
     // ========================================================
-    // 4. FIND RELEVANT PREVIOUS AVAILABILITY MESSAGE
+    // 4. FIND PREVIOUS AVAILABILITY MESSAGE
     // ========================================================
     //
-    // IMPORTANT:
-    // Do NOT only inspect the immediately previous assistant
-    // message.
+    // We scan backwards because the immediately previous
+    // assistant message may not be the availability message.
     //
-    // The conversation may contain:
+    // Example:
     //
     // Assistant:
     // "10 AM is unavailable. 11 AM is available."
     //
     // Assistant:
-    // "I'll confirm that..."
+    // "Let me know which time works."
     //
     // Customer:
     // "11 AM works."
     //
-    // Therefore we scan backwards and find the latest
-    // assistant message that actually contains availability
-    // context.
-    //
     // ========================================================
 
     let previousAvailabilityMessage = "";
+
+    let previousAvailabilityIndex = -1;
+
 
     if (
         Array.isArray(conversationMessages)
@@ -209,6 +212,7 @@ const getRescheduleIntent = ({
             const previousMessage =
                 conversationMessages[i];
 
+
             if (
                 !previousMessage ||
                 previousMessage.role !== "ASSISTANT" ||
@@ -216,6 +220,7 @@ const getRescheduleIntent = ({
             ) {
                 continue;
             }
+
 
             const assistantContent =
                 previousMessage.content
@@ -263,6 +268,9 @@ const getRescheduleIntent = ({
                 previousAvailabilityMessage =
                     assistantContent;
 
+                previousAvailabilityIndex =
+                    i;
+
                 break;
 
             }
@@ -271,7 +279,7 @@ const getRescheduleIntent = ({
 
 
     // ========================================================
-    // 5. CHECK WHETHER CUSTOMER SELECTED A TIME/DATE
+    // 5. CHECK WHETHER CUSTOMER SELECTED TIME/DATE
     // ========================================================
 
     const hasTimeReference =
@@ -306,6 +314,10 @@ const getRescheduleIntent = ({
             normalizedMessage
         );
 
+
+    // ========================================================
+    // 6. SELECTION LANGUAGE
+    // ========================================================
 
     const selectionPatterns = [
 
@@ -345,6 +357,7 @@ const getRescheduleIntent = ({
         /\bthat slot\b/
     ];
 
+
     const hasSelectionLanguage =
         selectionPatterns.some(
             pattern =>
@@ -353,11 +366,111 @@ const getRescheduleIntent = ({
 
 
     // ========================================================
-    // 6. ALTERNATIVE SELECTION INTENT
+    // 7. DETERMINE WHETHER THE CONVERSATION IS IN A
+    //    RESCHEDULE CONTEXT
+    // ========================================================
+    //
+    // This is the important fix.
+    //
+    // An availability message alone does NOT mean that the
+    // customer is rescheduling.
+    //
+    // We look BEFORE the availability message for evidence
+    // that the customer was actually trying to reschedule.
+    //
+    // This prevents:
+    //
+    // New booking:
+    // "I'd like to book 4 PM."
+    //
+    // from becoming:
+    //
+    // "Reschedule"
+    //
+    // simply because an earlier availability response existed.
+    // ========================================================
+
+    let previousRescheduleContext = false;
+
+
+    if (
+        previousAvailabilityIndex > 0 &&
+        Array.isArray(conversationMessages)
+    ) {
+
+        for (
+            let i = previousAvailabilityIndex - 1;
+            i >= 0;
+            i--
+        ) {
+
+            const previousMessage =
+                conversationMessages[i];
+
+
+            if (
+                !previousMessage ||
+                typeof previousMessage.content !== "string"
+            ) {
+                continue;
+            }
+
+
+            const content =
+                previousMessage.content
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[’‘]/g, "'")
+                    .replace(/\s+/g, " ");
+
+
+            // ------------------------------------------------
+            // Customer explicitly mentioned rescheduling
+            // ------------------------------------------------
+
+            const indicatesReschedule =
+                directReschedulePatterns.some(
+                    pattern =>
+                        pattern.test(content)
+                ) ||
+                naturalLanguagePatterns.some(
+                    pattern =>
+                        pattern.test(content)
+                ) ||
+                referencePatterns.some(
+                    pattern =>
+                        pattern.test(content)
+                );
+
+
+            if (
+                indicatesReschedule
+            ) {
+
+                previousRescheduleContext = true;
+
+                break;
+
+            }
+        }
+    }
+
+
+    // ========================================================
+    // 8. ALTERNATIVE SELECTION INTENT
+    // ========================================================
+    //
+    // Alternative selection becomes reschedule intent ONLY if:
+    //
+    // 1. An availability/alternative response exists
+    // 2. The customer selected a time/date
+    // 3. The earlier conversation was actually a reschedule
+    //
     // ========================================================
 
     const hasAlternativeSelectionIntent =
         previousAvailabilityMessage.length > 0 &&
+        previousRescheduleContext &&
         (
             hasTimeReference ||
             hasDateReference ||
@@ -366,7 +479,7 @@ const getRescheduleIntent = ({
 
 
     // ========================================================
-    // 7. FINAL RESULT
+    // 9. FINAL RESULT
     // ========================================================
 
     const wantsReschedule =
@@ -385,3 +498,4 @@ const getRescheduleIntent = ({
 module.exports = {
     getRescheduleIntent
 };
+
