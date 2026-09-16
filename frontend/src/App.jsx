@@ -6,6 +6,8 @@ import {
 
 import Home from "./pages/Home";
 import Chat from "./pages/Chat";
+import Login from "./pages/Login";
+import Dashboard from "./pages/dashboard/Dashboard";
 
 const App = () => {
     return (
@@ -20,9 +22,20 @@ const App = () => {
                     path="/chat"
                     element={<Chat />}
                 />
+
+                <Route
+                    path="/admin/login"
+                    element={<Login />}
+                />
+
+                <Route
+                    path="/admin"
+                    element={<Dashboard />}
+                />
             </Routes>
         </BrowserRouter>
     );
 };
 
 export default App;
+
