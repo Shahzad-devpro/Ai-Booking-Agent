@@ -8,6 +8,7 @@ import Home from "./pages/Home";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
 import Dashboard from "./pages/dashboard/Dashboard";
+import Leads from "./pages/dashboard/Leads";
 
 const App = () => {
     return (
@@ -31,6 +32,10 @@ const App = () => {
                 <Route
                     path="/admin"
                     element={<Dashboard />}
+                />
+                <Route
+                    path="/admin/leads"
+                    element={<Leads />}
                 />
             </Routes>
         </BrowserRouter>

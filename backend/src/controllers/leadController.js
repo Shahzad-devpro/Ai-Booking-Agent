@@ -56,7 +56,7 @@ const getLeadById = async (req,res) => {
         } 
         res.status(200).json({
             success: true,
-            Date: lead
+            Data: lead
         });
     } catch(error){
         console.log("Get lead error",error);

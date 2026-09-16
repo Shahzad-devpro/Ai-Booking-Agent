@@ -9,8 +9,8 @@ const router = express.Router();
 
 router.post("/", validateCreateLead, createLead);
 router.get("/", authMiddleware, validateLeadQuery, getAllLeads);
-router.get("/:id",getLeadById);
-router.patch("/:id/status", validLeadStatus, updateLeadStatus);
+router.get("/:id", authMiddleware, getLeadById);
+router.patch("/:id/status", authMiddleware, validLeadStatus, updateLeadStatus);
 
 
 module.exports = router;
