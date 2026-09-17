@@ -1,17 +1,31 @@
-const express = require("express");
+const express =
+    require("express");
+
 
 const {
     getAvailableSlots,
+    getActiveTechnicians,
     createAppointment,
     getAllAppointments,
     getAppointmentById,
     cancelAppointment,
-    rescheduleAppointmentController
-} = require("../controllers/appointmentController");
+    rescheduleAppointmentController,
+    assignTechnician
+} =
+    require("../controllers/appointmentController");
 
-const authMiddleware = require("../middleware/authMiddleware");
 
-const router = express.Router();
+const authMiddleware =
+    require("../middleware/authMiddleware");
+
+
+const router =
+    express.Router();
+
+
+// ============================================================
+// AVAILABILITY
+// ============================================================
 
 router.get(
     "/availability",
@@ -19,25 +33,62 @@ router.get(
     getAvailableSlots
 );
 
+
+// ============================================================
+// ACTIVE TECHNICIANS
+// IMPORTANT: MUST COME BEFORE /:id
+// ============================================================
+
+router.get(
+    "/technicians",
+    authMiddleware,
+    getActiveTechnicians
+);
+
+
+// ============================================================
+// APPOINTMENTS
+// ============================================================
+
 router.post(
     "/",
     authMiddleware,
     createAppointment
 );
-router.get("/",
+
+
+router.get(
+    "/",
     authMiddleware,
     getAllAppointments
-)
+);
+
+
+// ============================================================
+// APPOINTMENT DETAIL
+// ============================================================
+
 router.get(
     "/:id",
     authMiddleware,
     getAppointmentById
 );
+
+
+// ============================================================
+// CANCEL
+// ============================================================
+
 router.patch(
     "/:id/cancel",
     authMiddleware,
     cancelAppointment
 );
+
+
+// ============================================================
+// RESCHEDULE
+// ============================================================
 
 router.patch(
     "/:id/reschedule",
@@ -45,4 +96,17 @@ router.patch(
     rescheduleAppointmentController
 );
 
-module.exports = router;
+
+// ============================================================
+// MANUAL TECHNICIAN ASSIGNMENT
+// ============================================================
+
+router.patch(
+    "/:id/technician",
+    authMiddleware,
+    assignTechnician
+);
+
+
+module.exports =
+    router;

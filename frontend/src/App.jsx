@@ -4,75 +4,87 @@ import {
     Route,
 } from "react-router-dom";
 
-import Home from "./pages/Home";
-import Chat from "./pages/Chat";
-import Login from "./pages/Login";
 
-import Dashboard from "./pages/dashboard/Dashboard";
-import Leads from "./pages/dashboard/Leads";
-import Appointments from "./pages/dashboard/Appointments";
-import Customers from "./pages/dashboard/Customers";
-import Settings from "./pages/dashboard/Settings";
+import Home
+    from "./pages/Home";
 
-import ProtectedRoute from "./components/auth/ProtectedRoute";
+import Chat
+    from "./pages/Chat";
+
+import Login
+    from "./pages/Login";
+
+import Dashboard
+    from "./pages/dashboard/Dashboard";
+
+import Leads
+    from "./pages/dashboard/Leads";
+
+import Appointments
+    from "./pages/dashboard/Appointments";
 
 
 const App = () => {
+
     return (
+
         <BrowserRouter>
 
             <Routes>
 
                 <Route
                     path="/"
-                    element={<Home />}
+                    element={
+                        <Home />
+                    }
                 />
+
 
                 <Route
                     path="/chat"
-                    element={<Chat />}
+                    element={
+                        <Chat />
+                    }
                 />
 
 
                 <Route
                     path="/admin/login"
-                    element={<Login />}
+                    element={
+                        <Login />
+                    }
                 />
 
 
-                <Route element={<ProtectedRoute />}>
+                <Route
+                    path="/admin"
+                    element={
+                        <Dashboard />
+                    }
+                />
 
-                    <Route
-                        path="/admin"
-                        element={<Dashboard />}
-                    />
 
-                    <Route
-                        path="/admin/leads"
-                        element={<Leads />}
-                    />
+                <Route
+                    path="/admin/leads"
+                    element={
+                        <Leads />
+                    }
+                />
 
-                    <Route
-                        path="/admin/appointments"
-                        element={<Appointments />}
-                    />
 
-                    <Route
-                        path="/admin/customers"
-                        element={<Customers />}
-                    />
-
-                    <Route
-                        path="/admin/settings"
-                        element={<Settings />}
-                    />
-
-                </Route>
+                <Route
+                    path="/admin/appointments"
+                    element={
+                        <Appointments />
+                    }
+                />
 
             </Routes>
 
         </BrowserRouter>
+
     );
+
 };
 
 

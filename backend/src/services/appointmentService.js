@@ -1,6 +1,7 @@
 const { DateTime } = require("luxon");
 
-const prisma = require("../config/database");
+const prisma =
+    require("../config/database");
 
 const {
     BUSINESS_TIMEZONE,
@@ -10,481 +11,658 @@ const {
 } = require("../config/businessConfig");
 
 
-/*
-|--------------------------------------------------------------------------
-| CREATE APPOINTMENT
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// HELPERS
+// ============================================================
 
-const createAppointment = async ({
-    leadId,
-    customerId,
-    startTime,
-    endTime,
-    notes
+const createError = (
+    message,
+    statusCode = 400
+) => {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+};
+
+
+const parseBusinessDateTime = (
+    value
+) => {
+    const parsed =
+        DateTime
+            .fromISO(value, {
+                setZone: true
+            })
+            .setZone(
+                BUSINESS_TIMEZONE
+            );
+
+    if (!parsed.isValid) {
+        throw createError(
+            "Invalid appointment time",
+            400
+        );
+    }
+
+    return parsed;
+};
+
+
+const validateBusinessTime = ({
+    start,
+    end,
+    pastMessage
 }) => {
 
-    // ---------------------------------------------------------
-    // 1. Validate required fields
-    // ---------------------------------------------------------
-
-    if (!leadId || !customerId || !startTime || !endTime) {
-        const error = new Error(
-            "leadId, customerId, startTime and endTime are required"
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 2. Convert incoming times to New York timezone
-    // ---------------------------------------------------------
-
-    const start = DateTime.fromISO(startTime, {
-        setZone: true
-    }).setZone(BUSINESS_TIMEZONE);
-
-    const end = DateTime.fromISO(endTime, {
-        setZone: true
-    }).setZone(BUSINESS_TIMEZONE);
-
-
-    // ---------------------------------------------------------
-    // 3. Validate dates
-    // ---------------------------------------------------------
-
-    if (!start.isValid || !end.isValid) {
-        const error = new Error(
-            "Invalid appointment time"
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 4. Appointment must not be in the past
-    // ---------------------------------------------------------
-
-    const now = DateTime.now()
-        .setZone(BUSINESS_TIMEZONE);
+    const now =
+        DateTime
+            .now()
+            .setZone(
+                BUSINESS_TIMEZONE
+            );
 
     if (start <= now) {
-        const error = new Error(
-            "Appointment cannot be booked in the past"
+        throw createError(
+            pastMessage,
+            400
         );
-
-        error.statusCode = 400;
-        throw error;
     }
 
-
-    // ---------------------------------------------------------
-    // 5. Sunday is closed
-    // ---------------------------------------------------------
 
     if (start.weekday === 7) {
-        const error = new Error(
-            "Appointments are not available on Sunday"
+        throw createError(
+            "Appointments are not available on Sunday",
+            400
         );
-
-        error.statusCode = 400;
-        throw error;
     }
 
 
-    // ---------------------------------------------------------
-    // 6. End time must be after start time
-    // ---------------------------------------------------------
-
-    if (end.toMillis() <= start.toMillis()) {
-        const error = new Error(
-            "Appointment end time must be after start time"
+    if (
+        end.toMillis() <=
+        start.toMillis()
+    ) {
+        throw createError(
+            "Appointment end time must be after start time",
+            400
         );
-
-        error.statusCode = 400;
-        throw error;
     }
 
-
-    // ---------------------------------------------------------
-    // 7. Appointment must be exactly 1 hour
-    // ---------------------------------------------------------
 
     const durationInMinutes =
-        end.diff(start, "minutes").minutes;
+        end.diff(
+            start,
+            "minutes"
+        ).minutes;
 
     const requiredDuration =
         SLOT_DURATION_HOURS * 60;
 
-    if (durationInMinutes !== requiredDuration) {
-        const error = new Error(
-            `Appointment must be exactly ${SLOT_DURATION_HOURS} hour`
+    if (
+        durationInMinutes !==
+        requiredDuration
+    ) {
+        throw createError(
+            `Appointment must be exactly ${SLOT_DURATION_HOURS} hour`,
+            400
         );
-
-        error.statusCode = 400;
-        throw error;
     }
 
-
-    // ---------------------------------------------------------
-    // 8. Appointment must start on full hour
-    // ---------------------------------------------------------
 
     if (
         start.minute !== 0 ||
         start.second !== 0 ||
         start.millisecond !== 0
     ) {
-        const error = new Error(
-            "Appointments must start on a full-hour slot"
+        throw createError(
+            "Appointments must start on a full-hour slot",
+            400
         );
-
-        error.statusCode = 400;
-        throw error;
     }
 
 
-    // ---------------------------------------------------------
-    // 9. Create business hours
-    // ---------------------------------------------------------
-
-    const businessStart = start.startOf("day").set({
-        hour: BUSINESS_START_HOUR,
-        minute: 0,
-        second: 0,
-        millisecond: 0
-    });
-
-    const businessEnd = start.startOf("day").set({
-        hour: BUSINESS_END_HOUR,
-        minute: 0,
-        second: 0,
-        millisecond: 0
-    });
+    const businessStart =
+        start
+            .startOf("day")
+            .set({
+                hour:
+                    BUSINESS_START_HOUR,
+                minute: 0,
+                second: 0,
+                millisecond: 0
+            });
 
 
-    // ---------------------------------------------------------
-    // 10. Appointment must be inside business hours
-    // ---------------------------------------------------------
+    const businessEnd =
+        start
+            .startOf("day")
+            .set({
+                hour:
+                    BUSINESS_END_HOUR,
+                minute: 0,
+                second: 0,
+                millisecond: 0
+            });
+
 
     if (
-        start.toMillis() < businessStart.toMillis() ||
-        end.toMillis() > businessEnd.toMillis()
+        start.toMillis() <
+            businessStart.toMillis() ||
+        end.toMillis() >
+            businessEnd.toMillis()
     ) {
-        const error = new Error(
-            `Appointment must be within business hours: ${BUSINESS_START_HOUR}:00 AM - ${BUSINESS_END_HOUR}:00 PM`
+        throw createError(
+            `Appointment must be within business hours: ${BUSINESS_START_HOUR}:00 AM - ${BUSINESS_END_HOUR}:00 PM`,
+            400
         );
-
-        error.statusCode = 400;
-        throw error;
     }
-
-
-    // ---------------------------------------------------------
-    // 11. Convert New York time to UTC
-    // ---------------------------------------------------------
-
-    const startUTC = start
-        .toUTC()
-        .toJSDate();
-
-    const endUTC = end
-        .toUTC()
-        .toJSDate();
-
-
-    // ---------------------------------------------------------
-    // 12. Check lead
-    // ---------------------------------------------------------
-
-    const lead = await prisma.lead.findUnique({
-        where: {
-            id: leadId
-        }
-    });
-
-    if (!lead) {
-        const error = new Error(
-            "Lead not found"
-        );
-
-        error.statusCode = 404;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 13. Check customer
-    // ---------------------------------------------------------
-
-    const customer = await prisma.customer.findUnique({
-        where: {
-            id: customerId
-        }
-    });
-
-    if (!customer) {
-        const error = new Error(
-            "Customer not found"
-        );
-
-        error.statusCode = 404;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 14. Make sure lead belongs to customer
-    // ---------------------------------------------------------
-
-    if (lead.customerId !== customerId) {
-        const error = new Error(
-            "Lead does not belong to this customer"
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 15. Check if lead already has appointment
-    // ---------------------------------------------------------
-
-    const existingAppointment =
-        await prisma.appointment.findUnique({
-            where: {
-                leadId
-            }
-        });
-
-    if (existingAppointment) {
-        const error = new Error(
-            "This lead already has an appointment"
-        );
-
-        error.statusCode = 409;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 16. Get active technicians
-    // ---------------------------------------------------------
-
-    const activeTechnicians =
-        await prisma.technician.findMany({
-            where: {
-                active: true
-            },
-
-            select: {
-                id: true,
-                name: true
-            }
-        });
-
-
-    // ---------------------------------------------------------
-    // 17. Make sure technicians exist
-    // ---------------------------------------------------------
-
-    if (activeTechnicians.length === 0) {
-        const error = new Error(
-            "No technicians are currently available"
-        );
-
-        error.statusCode = 409;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 18. Find technicians already booked during slot
-    // ---------------------------------------------------------
-
-    const conflictingAppointments =
-        await prisma.appointment.findMany({
-            where: {
-                status: "BOOKED",
-
-                technicianId: {
-                    not: null
-                },
-
-                startTime: {
-                    lt: endUTC
-                },
-
-                endTime: {
-                    gt: startUTC
-                }
-            },
-
-            select: {
-                technicianId: true
-            }
-        });
-
-
-    // ---------------------------------------------------------
-    // 19. Create Set of booked technicians
-    // ---------------------------------------------------------
-
-    const bookedTechnicianIds =
-        new Set(
-            conflictingAppointments
-                .map(
-                    appointment =>
-                        appointment.technicianId
-                )
-        );
-
-
-    // ---------------------------------------------------------
-    // 20. Find available technicians
-    // ---------------------------------------------------------
-
-    const availableTechnicians =
-        activeTechnicians.filter(
-            technician =>
-                !bookedTechnicianIds.has(
-                    technician.id
-                )
-        );
-
-
-    // ---------------------------------------------------------
-    // 21. No technician available
-    // ---------------------------------------------------------
-
-    if (availableTechnicians.length === 0) {
-        const error = new Error(
-            "No technician is available for this appointment slot"
-        );
-
-        error.statusCode = 409;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 22. Automatically assign technician
-    // ---------------------------------------------------------
-
-    const assignedTechnician =
-        availableTechnicians[0];
-
-
-    // ---------------------------------------------------------
-// 23. Create appointment + update lead in transaction
-// ---------------------------------------------------------
-
-const appointment = await prisma.$transaction(async (tx) => {
-
-    // Create appointment
-    const newAppointment =
-        await tx.appointment.create({
-            data: {
-                customerId,
-                leadId,
-
-                technicianId:
-                    assignedTechnician.id,
-
-                startTime: startUTC,
-                endTime: endUTC,
-
-                notes: notes || null
-            }
-        });
-
-
-    // Update lead status
-    await tx.lead.update({
-        where: {
-            id: leadId
-        },
-
-        data: {
-            status: "BOOKED"
-        }
-    });
-
-
-    return newAppointment;
-});
-
-
-// ---------------------------------------------------------
-// 24. Fetch complete updated appointment
-// ---------------------------------------------------------
-
-const completeAppointment =
-    await prisma.appointment.findUnique({
-        where: {
-            id: appointment.id
-        },
-
-        include: {
-            customer: true,
-            lead: true,
-            technician: true
-        }
-    });
-
-
-// ---------------------------------------------------------
-// 25. Return appointment
-// ---------------------------------------------------------
-
-return completeAppointment;
-
 };
 
 
-/*
-|--------------------------------------------------------------------------
-| GET ALL APPOINTMENTS
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// FIND AVAILABLE TECHNICIAN
+// ============================================================
 
-const getAllAppointments = async ({
-    status,
-    page = 1,
-    limit = 10
-}) => {
+const findAvailableTechnician =
+    async ({
+        startUTC,
+        endUTC,
+        excludeAppointmentId = null,
+        tx = prisma
+    }) => {
 
-    const skip = (page - 1) * limit;
+        const technicians =
+            await tx.technician.findMany({
+                where: {
+                    active: true
+                },
+                select: {
+                    id: true,
+                    name: true
+                },
+                orderBy: {
+                    name: "asc"
+                }
+            });
 
-    const where = {};
 
-    if (status) {
-        where.status = status;
-    }
+        if (
+            technicians.length === 0
+        ) {
+            throw createError(
+                "No technicians are currently available",
+                409
+            );
+        }
 
 
-    const [appointments, total] =
-        await Promise.all([
+        const conflictWhere = {
+            status: "BOOKED",
 
+            technicianId: {
+                not: null
+            },
+
+            startTime: {
+                lt: endUTC
+            },
+
+            endTime: {
+                gt: startUTC
+            }
+        };
+
+
+        if (
+            excludeAppointmentId
+        ) {
+            conflictWhere.id = {
+                not:
+                    excludeAppointmentId
+            };
+        }
+
+
+        const conflicts =
+            await tx.appointment.findMany({
+                where: conflictWhere,
+                select: {
+                    technicianId: true
+                }
+            });
+
+
+        const bookedTechnicianIds =
+            new Set(
+                conflicts.map(
+                    appointment =>
+                        appointment.technicianId
+                )
+            );
+
+
+        return (
+            technicians.find(
+                technician =>
+                    !bookedTechnicianIds.has(
+                        technician.id
+                    )
+            ) || null
+        );
+};
+
+
+// ============================================================
+// CREATE APPOINTMENT
+// ============================================================
+
+const createAppointment =
+    async ({
+        leadId,
+        customerId,
+        startTime,
+        endTime,
+        notes
+    }) => {
+
+        if (
+            !leadId ||
+            !customerId ||
+            !startTime ||
+            !endTime
+        ) {
+            throw createError(
+                "leadId, customerId, startTime and endTime are required",
+                400
+            );
+        }
+
+
+        const start =
+            parseBusinessDateTime(
+                startTime
+            );
+
+        const end =
+            parseBusinessDateTime(
+                endTime
+            );
+
+
+        validateBusinessTime({
+            start,
+            end,
+            pastMessage:
+                "Appointment cannot be booked in the past"
+        });
+
+
+        const startUTC =
+            start
+                .toUTC()
+                .toJSDate();
+
+        const endUTC =
+            end
+                .toUTC()
+                .toJSDate();
+
+
+        const lead =
+            await prisma.lead.findUnique({
+                where: {
+                    id: leadId
+                }
+            });
+
+
+        if (!lead) {
+            throw createError(
+                "Lead not found",
+                404
+            );
+        }
+
+
+        const customer =
+            await prisma.customer.findUnique({
+                where: {
+                    id: customerId
+                }
+            });
+
+
+        if (!customer) {
+            throw createError(
+                "Customer not found",
+                404
+            );
+        }
+
+
+        if (
+            lead.customerId !==
+            customerId
+        ) {
+            throw createError(
+                "Lead does not belong to this customer",
+                400
+            );
+        }
+
+
+        const existingAppointment =
+            await prisma.appointment.findUnique({
+                where: {
+                    leadId
+                }
+            });
+
+
+        if (existingAppointment) {
+            throw createError(
+                "This lead already has an appointment",
+                409
+            );
+        }
+
+
+        const appointment =
+            await prisma.$transaction(
+                async tx => {
+
+                    const technician =
+                        await findAvailableTechnician({
+                            startUTC,
+                            endUTC,
+                            tx
+                        });
+
+
+                    if (!technician) {
+                        throw createError(
+                            "No technician is available for this appointment slot",
+                            409
+                        );
+                    }
+
+
+                    const created =
+                        await tx.appointment.create({
+                            data: {
+                                customerId,
+                                leadId,
+                                technicianId:
+                                    technician.id,
+                                startTime:
+                                    startUTC,
+                                endTime:
+                                    endUTC,
+                                notes:
+                                    notes ||
+                                    null
+                            }
+                        });
+
+
+                    await tx.lead.update({
+                        where: {
+                            id: leadId
+                        },
+                        data: {
+                            status: "BOOKED"
+                        }
+                    });
+
+
+                    return created;
+                }
+            );
+
+
+        return getAppointmentById(
+            appointment.id
+        );
+};
+
+
+// ============================================================
+// GET ALL APPOINTMENTS
+// ============================================================
+
+const getAllAppointments =
+    async ({
+        search = "",
+        status,
+        technicianId,
+        date,
+        page = 1,
+        limit = 10
+    }) => {
+
+        const safePage =
+            Math.max(
+                1,
+                Number(page) || 1
+            );
+
+        const safeLimit =
+            Math.min(
+                50,
+                Math.max(
+                    1,
+                    Number(limit) || 10
+                )
+            );
+
+
+        const skip =
+            (safePage - 1) *
+            safeLimit;
+
+
+        const where = {};
+
+
+        if (status) {
+            where.status =
+                status;
+        }
+
+
+        if (technicianId) {
+            where.technicianId =
+                technicianId;
+        }
+
+
+        // --------------------------------------------------------
+        // New York calendar-day filtering
+        // --------------------------------------------------------
+
+        if (date) {
+
+            const startOfDay =
+                DateTime.fromISO(
+                    `${date}T00:00:00`,
+                    {
+                        zone:
+                            BUSINESS_TIMEZONE
+                    }
+                );
+
+
+            if (
+                !startOfDay.isValid
+            ) {
+                throw createError(
+                    "Invalid appointment date",
+                    400
+                );
+            }
+
+
+            const endOfDay =
+                startOfDay.plus({
+                    days: 1
+                });
+
+
+            where.startTime = {
+                gte:
+                    startOfDay
+                        .toUTC()
+                        .toJSDate(),
+
+                lt:
+                    endOfDay
+                        .toUTC()
+                        .toJSDate()
+            };
+        }
+
+
+        // --------------------------------------------------------
+        // Search
+        // --------------------------------------------------------
+
+        const normalizedSearch =
+            typeof search === "string"
+                ? search.trim()
+                : "";
+
+
+        if (normalizedSearch) {
+
+            where.OR = [
+                {
+                    customer: {
+                        name: {
+                            contains:
+                                normalizedSearch,
+                            mode:
+                                "insensitive"
+                        }
+                    }
+                },
+
+                {
+                    customer: {
+                        phone: {
+                            contains:
+                                normalizedSearch
+                        }
+                    }
+                },
+
+                {
+                    customer: {
+                        email: {
+                            contains:
+                                normalizedSearch,
+                            mode:
+                                "insensitive"
+                        }
+                    }
+                },
+
+                {
+                    lead: {
+                        service: {
+                            contains:
+                                normalizedSearch,
+                            mode:
+                                "insensitive"
+                        }
+                    }
+                },
+
+                {
+                    lead: {
+                        problemDescription: {
+                            contains:
+                                normalizedSearch,
+                            mode:
+                                "insensitive"
+                        }
+                    }
+                },
+
+                {
+                    technician: {
+                        name: {
+                            contains:
+                                normalizedSearch,
+                            mode:
+                                "insensitive"
+                        }
+                    }
+                }
+            ];
+        }
+
+
+        const [
+            appointments,
+            total
+        ] = await Promise.all([
             prisma.appointment.findMany({
                 where,
 
-                include: {
-                    customer: true,
-                    lead: true
+                select: {
+                    id: true,
+                    startTime: true,
+                    endTime: true,
+                    status: true,
+                    notes: true,
+                    createdAt: true,
+                    updatedAt: true,
+
+                    customer: {
+                        select: {
+                            id: true,
+                            name: true,
+                            phone: true,
+                            email: true,
+                            address: true
+                        }
+                    },
+
+                    lead: {
+                        select: {
+                            id: true,
+                            service: true,
+                            problemDescription:
+                                true,
+                            urgency: true,
+                            status: true
+                        }
+                    },
+
+                    technician: {
+                        select: {
+                            id: true,
+                            name: true,
+                            phone: true,
+                            email: true
+                        }
+                    }
                 },
 
-                orderBy: {
-                    startTime: "asc"
-                },
+                // Newest bookings first.
+                // ID is included as a deterministic tie-breaker.
+                orderBy: [
+                    {
+                        createdAt:
+                            "desc"
+                    },
+                    {
+                        id:
+                            "desc"
+                    }
+                ],
 
                 skip,
-                take: limit
+                take: safeLimit
             }),
 
             prisma.appointment.count({
@@ -493,83 +671,77 @@ const getAllAppointments = async ({
         ]);
 
 
-    return {
-        appointments,
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit)
-    };
+        return {
+            appointments,
+            total,
+            page: safePage,
+            limit: safeLimit,
+            totalPages:
+                Math.ceil(
+                    total /
+                    safeLimit
+                )
+        };
 };
 
 
-/*
-|--------------------------------------------------------------------------
-| GET APPOINTMENT BY ID
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// GET APPOINTMENT BY ID
+// ============================================================
 
-const getAppointmentById = async (id) => {
+const getAppointmentById =
+    async id => {
 
-    if (!id) {
-        const error = new Error(
-            "Appointment ID is required"
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
+        if (!id) {
+            throw createError(
+                "Appointment ID is required",
+                400
+            );
+        }
 
 
-    const appointment =
-        await prisma.appointment.findUnique({
+        const appointment =
+            await prisma.appointment.findUnique({
+                where: {
+                    id
+                },
 
-            where: {
-                id
-            },
-
-            include: {
-                customer: true,
-                lead: true
-            }
-        });
-
-
-    if (!appointment) {
-        const error = new Error(
-            "Appointment not found"
-        );
-
-        error.statusCode = 404;
-        throw error;
-    }
+                include: {
+                    customer: true,
+                    lead: true,
+                    technician: true
+                }
+            });
 
 
-    return appointment;
+        if (!appointment) {
+            throw createError(
+                "Appointment not found",
+                404
+            );
+        }
+
+
+        return appointment;
 };
 
 
-/*
-|--------------------------------------------------------------------------
-| GET BOOKED APPOINTMENT BY LEAD ID
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// GET BOOKED APPOINTMENT BY LEAD
+// ============================================================
 
-const getBookedAppointmentByLeadId = async (leadId) => {
+const getBookedAppointmentByLeadId =
+    async leadId => {
 
-    if (!leadId) {
-        const error = new Error(
-            "Lead ID is required"
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
+        if (!leadId) {
+            throw createError(
+                "Lead ID is required",
+                400
+            );
+        }
 
 
-    const appointment =
-        await prisma.appointment.findFirst({
-
+        return prisma.appointment.findFirst({
             where: {
                 leadId,
                 status: "BOOKED"
@@ -580,366 +752,252 @@ const getBookedAppointmentByLeadId = async (leadId) => {
                 lead: true,
                 technician: true
             }
-
         });
-
-
-    return appointment;
 };
 
 
-/*
-|--------------------------------------------------------------------------
-| CANCEL APPOINTMENT
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// CANCEL APPOINTMENT
+// ============================================================
 
-const cancelAppointment = async (id) => {
+const cancelAppointment =
+    async id => {
 
-    if (!id) {
-        const error = new Error(
-            "Appointment ID is required"
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
+        if (!id) {
+            throw createError(
+                "Appointment ID is required",
+                400
+            );
+        }
 
 
-    // ---------------------------------------------------------
-    // 1. Find appointment
-    // ---------------------------------------------------------
-
-    const appointment =
-        await prisma.appointment.findUnique({
-            where: {
-                id
-            }
-        });
-
-
-    if (!appointment) {
-        const error = new Error(
-            "Appointment not found"
-        );
-
-        error.statusCode = 404;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 2. Prevent duplicate cancellation
-    // ---------------------------------------------------------
-
-    if (appointment.status === "CANCELLED") {
-        const error = new Error(
-            "Appointment is already cancelled"
-        );
-
-        error.statusCode = 409;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 3. Completed appointments cannot be cancelled
-    // ---------------------------------------------------------
-
-    if (appointment.status === "COMPLETED") {
-        const error = new Error(
-            "Completed appointment cannot be cancelled"
-        );
-
-        error.statusCode = 409;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 4. Cancel appointment + update lead atomically
-    // ---------------------------------------------------------
-
-    const cancelledAppointment =
-        await prisma.$transaction(async (tx) => {
-
-            // Cancel appointment
-            await tx.appointment.update({
+        const appointment =
+            await prisma.appointment.findUnique({
                 where: {
                     id
-                },
-
-                data: {
-                    status: "CANCELLED"
                 }
             });
 
 
-            // Update lead
-            await tx.lead.update({
-                where: {
-                    id: appointment.leadId
-                },
-
-                data: {
-                    status: "CANCELLED"
-                }
-            });
+        if (!appointment) {
+            throw createError(
+                "Appointment not found",
+                404
+            );
+        }
 
 
-            return true;
-        });
+        if (
+            appointment.status ===
+            "CANCELLED"
+        ) {
+            throw createError(
+                "Appointment is already cancelled",
+                409
+            );
+        }
 
 
-    // ---------------------------------------------------------
-    // 5. Fetch fresh updated appointment
-    // ---------------------------------------------------------
+        if (
+            appointment.status ===
+            "COMPLETED"
+        ) {
+            throw createError(
+                "Completed appointment cannot be cancelled",
+                409
+            );
+        }
 
-    const completeCancelledAppointment =
-        await prisma.appointment.findUnique({
 
-            where: {
-                id
-            },
+        await prisma.$transaction(
+            async tx => {
 
-            include: {
-                customer: true,
-                lead: true,
-                technician: true
+                await tx.appointment.update({
+                    where: {
+                        id
+                    },
+
+                    data: {
+                        status:
+                            "CANCELLED"
+                    }
+                });
+
+
+                await tx.lead.update({
+                    where: {
+                        id:
+                            appointment.leadId
+                    },
+
+                    data: {
+                        status:
+                            "CANCELLED"
+                    }
+                });
             }
-        });
+        );
 
 
-    return completeCancelledAppointment;
+        return getAppointmentById(
+            id
+        );
 };
 
 
-const rescheduleAppointment = async ({
-    appointmentId,
-    startTime,
-    endTime
-}) => {
+// ============================================================
+// RESCHEDULE APPOINTMENT
+// ============================================================
 
-    // ---------------------------------------------------------
-    // 1. Validate input
-    // ---------------------------------------------------------
+const rescheduleAppointment =
+    async ({
+        appointmentId,
+        startTime,
+        endTime
+    }) => {
 
-    if (!appointmentId || !startTime || !endTime) {
-        const error = new Error(
-            "Appointment ID, startTime and endTime are required"
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 2. Parse requested time
-    // ---------------------------------------------------------
-
-    const start = DateTime.fromISO(startTime, {
-        setZone: true
-    }).setZone(BUSINESS_TIMEZONE);
-
-    const end = DateTime.fromISO(endTime, {
-        setZone: true
-    }).setZone(BUSINESS_TIMEZONE);
+        if (
+            !appointmentId ||
+            !startTime ||
+            !endTime
+        ) {
+            throw createError(
+                "Appointment ID, startTime and endTime are required",
+                400
+            );
+        }
 
 
-    if (!start.isValid || !end.isValid) {
-        const error = new Error(
-            "Invalid appointment time"
-        );
+        const start =
+            parseBusinessDateTime(
+                startTime
+            );
 
-        error.statusCode = 400;
-        throw error;
-    }
+        const end =
+            parseBusinessDateTime(
+                endTime
+            );
 
 
-    // ---------------------------------------------------------
-    // 3. Find existing appointment
-    // ---------------------------------------------------------
+        validateBusinessTime({
+            start,
+            end,
+            pastMessage:
+                "Appointment cannot be rescheduled to a past time"
+        });
 
-    const appointment =
-        await prisma.appointment.findUnique({
-            where: {
-                id: appointmentId
+
+        const startUTC =
+            start
+                .toUTC()
+                .toJSDate();
+
+        const endUTC =
+            end
+                .toUTC()
+                .toJSDate();
+
+
+        const existingAppointment =
+            await prisma.appointment.findUnique({
+                where: {
+                    id:
+                        appointmentId
+                }
+            });
+
+
+        if (!existingAppointment) {
+            throw createError(
+                "Appointment not found",
+                404
+            );
+        }
+
+
+        if (
+            existingAppointment.status ===
+            "CANCELLED"
+        ) {
+            throw createError(
+                "Cancelled appointment cannot be rescheduled",
+                409
+            );
+        }
+
+
+        if (
+            existingAppointment.status ===
+            "COMPLETED"
+        ) {
+            throw createError(
+                "Completed appointment cannot be rescheduled",
+                409
+            );
+        }
+
+
+        await prisma.$transaction(
+            async tx => {
+
+                const technician =
+                    await findAvailableTechnician({
+                        startUTC,
+                        endUTC,
+                        excludeAppointmentId:
+                            appointmentId,
+                        tx
+                    });
+
+
+                if (!technician) {
+                    throw createError(
+                        "No technician is available for the requested appointment slot",
+                        409
+                    );
+                }
+
+
+                await tx.appointment.update({
+                    where: {
+                        id:
+                            appointmentId
+                    },
+
+                    data: {
+                        startTime:
+                            startUTC,
+
+                        endTime:
+                            endUTC,
+
+                        technicianId:
+                            technician.id
+                    }
+                });
+            },
+
+            {
+                isolationLevel:
+                    "Serializable"
             }
-        });
-
-
-    if (!appointment) {
-        const error = new Error(
-            "Appointment not found"
         );
 
-        error.statusCode = 404;
-        throw error;
-    }
 
-
-    // ---------------------------------------------------------
-    // 4. Appointment status validation
-    // ---------------------------------------------------------
-
-    if (appointment.status === "CANCELLED") {
-        const error = new Error(
-            "Cancelled appointment cannot be rescheduled"
+        return getAppointmentById(
+            appointmentId
         );
+};
 
-        error.statusCode = 409;
-        throw error;
-    }
+// ============================================================
+// GET ACTIVE TECHNICIANS
+// ===========================================================
 
+const getActiveTechnicians =
+    async () => {
 
-    if (appointment.status === "COMPLETED") {
-        const error = new Error(
-            "Completed appointment cannot be rescheduled"
-        );
+        return prisma.technician.findMany({
 
-        error.statusCode = 409;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 5. Prevent past appointments
-    // ---------------------------------------------------------
-
-    const now = DateTime.now()
-        .setZone(BUSINESS_TIMEZONE);
-
-
-    if (start <= now) {
-        const error = new Error(
-            "Appointment cannot be rescheduled to a past time"
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 6. Sunday validation
-    // ---------------------------------------------------------
-
-    if (start.weekday === 7) {
-        const error = new Error(
-            "Appointments are not available on Sunday"
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 7. End time validation
-    // ---------------------------------------------------------
-
-    if (end.toMillis() <= start.toMillis()) {
-        const error = new Error(
-            "Appointment end time must be after start time"
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 8. Exact duration validation
-    // ---------------------------------------------------------
-
-    const durationInMinutes =
-        end.diff(start, "minutes").minutes;
-
-    const requiredDuration =
-        SLOT_DURATION_HOURS * 60;
-
-
-    if (durationInMinutes !== requiredDuration) {
-        const error = new Error(
-            `Appointment must be exactly ${SLOT_DURATION_HOURS} hour`
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 9. Full-hour validation
-    // ---------------------------------------------------------
-
-    if (
-        start.minute !== 0 ||
-        start.second !== 0 ||
-        start.millisecond !== 0
-    ) {
-        const error = new Error(
-            "Appointments must start on a full-hour slot"
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 10. Business hours validation
-    // ---------------------------------------------------------
-
-    const businessStart =
-        start.startOf("day").set({
-            hour: BUSINESS_START_HOUR,
-            minute: 0,
-            second: 0,
-            millisecond: 0
-        });
-
-
-    const businessEnd =
-        start.startOf("day").set({
-            hour: BUSINESS_END_HOUR,
-            minute: 0,
-            second: 0,
-            millisecond: 0
-        });
-
-
-    if (
-        start.toMillis() < businessStart.toMillis() ||
-        end.toMillis() > businessEnd.toMillis()
-    ) {
-        const error = new Error(
-            `Appointment must be within business hours: ${BUSINESS_START_HOUR}:00 AM - ${BUSINESS_END_HOUR}:00 PM`
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 11. Convert to UTC
-    // ---------------------------------------------------------
-
-    const startUTC =
-        start.toUTC().toJSDate();
-
-    const endUTC =
-        end.toUTC().toJSDate();
-
-
-    // ---------------------------------------------------------
-    // 12. Find active technicians
-    // ---------------------------------------------------------
-
-    const activeTechnicians =
-        await prisma.technician.findMany({
             where: {
                 active: true
             },
@@ -947,134 +1005,209 @@ const rescheduleAppointment = async ({
             select: {
                 id: true,
                 name: true
-            }
-        });
-
-
-    if (activeTechnicians.length === 0) {
-        const error = new Error(
-            "No technicians are currently available"
-        );
-
-        error.statusCode = 409;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 13. Find conflicting appointments
-    // ---------------------------------------------------------
-
-    const conflictingAppointments =
-        await prisma.appointment.findMany({
-            where: {
-                status: "BOOKED",
-
-                technicianId: {
-                    not: null
-                },
-
-                // IMPORTANT:
-                // Ignore the appointment we are rescheduling
-                id: {
-                    not: appointmentId
-                },
-
-                startTime: {
-                    lt: endUTC
-                },
-
-                endTime: {
-                    gt: startUTC
-                }
             },
 
-            select: {
-                technicianId: true
+            orderBy: {
+                name: "asc"
             }
+
         });
+    };
 
 
-    // ---------------------------------------------------------
-    // 14. Determine available technicians
-    // ---------------------------------------------------------
+// ============================================================
+// MANUAL TECHNICIAN ASSIGNMENT
+// ============================================================
 
-    const bookedTechnicianIds =
-        new Set(
-            conflictingAppointments.map(
-                appointment =>
-                    appointment.technicianId
-            )
-        );
+const assignTechnician =
+    async ({
+        appointmentId,
+        technicianId
+    }) => {
 
+        if (!appointmentId) {
 
-    const availableTechnicians =
-        activeTechnicians.filter(
-            technician =>
-                !bookedTechnicianIds.has(
-                    technician.id
-                )
-        );
+            const error =
+                new Error(
+                    "Appointment ID is required"
+                );
 
+            error.statusCode = 400;
 
-    if (availableTechnicians.length === 0) {
-        const error = new Error(
-            "No technician is available for the requested appointment slot"
-        );
-
-        error.statusCode = 409;
-        throw error;
-    }
-
-
-    // ---------------------------------------------------------
-    // 15. Assign technician
-    // ---------------------------------------------------------
-
-    const assignedTechnician =
-        availableTechnicians[0];
-
-
-    // ---------------------------------------------------------
-    // 16. Update appointment
-    // ---------------------------------------------------------
-
-    await prisma.appointment.update({
-
-        where: {
-            id: appointmentId
-        },
-
-        data: {
-            startTime: startUTC,
-            endTime: endUTC,
-            technicianId: assignedTechnician.id
+            throw error;
         }
-    });
 
 
-    // ---------------------------------------------------------
-    // 17. Fetch fresh appointment
-    // ---------------------------------------------------------
+        if (!technicianId) {
 
-    const updatedAppointment =
-        await prisma.appointment.findUnique({
+            const error =
+                new Error(
+                    "Technician ID is required"
+                );
 
-            where: {
-                id: appointmentId
-            },
+            error.statusCode = 400;
 
-            include: {
-                customer: true,
-                lead: true,
-                technician: true
-            }
-        });
+            throw error;
+        }
 
 
-    return updatedAppointment;
-};
+        const appointment =
+            await prisma.appointment.findUnique({
 
+                where: {
+                    id: appointmentId
+                }
+
+            });
+
+
+        if (!appointment) {
+
+            const error =
+                new Error(
+                    "Appointment not found"
+                );
+
+            error.statusCode = 404;
+
+            throw error;
+        }
+
+
+        if (
+            appointment.status !==
+            "BOOKED"
+        ) {
+
+            const error =
+                new Error(
+                    "Only booked appointments can have technicians assigned"
+                );
+
+            error.statusCode = 409;
+
+            throw error;
+        }
+
+
+        const technician =
+            await prisma.technician.findFirst({
+
+                where: {
+                    id: technicianId,
+                    active: true
+                }
+
+            });
+
+
+        if (!technician) {
+
+            const error =
+                new Error(
+                    "Active technician not found"
+                );
+
+            error.statusCode = 404;
+
+            throw error;
+        }
+
+
+        /*
+         * Assigning the same technician again is safe.
+         */
+        if (
+            appointment.technicianId ===
+            technicianId
+        ) {
+
+            return prisma.appointment.findUnique({
+
+                where: {
+                    id: appointmentId
+                },
+
+                include: {
+                    customer: true,
+                    lead: true,
+                    technician: true
+                }
+
+            });
+        }
+
+
+        /*
+         * A technician cannot have another BOOKED
+         * appointment overlapping this appointment.
+         */
+        const conflict =
+            await prisma.appointment.findFirst({
+
+                where: {
+
+                    id: {
+                        not: appointmentId
+                    },
+
+                    technicianId,
+
+                    status: "BOOKED",
+
+                    startTime: {
+                        lt: appointment.endTime
+                    },
+
+                    endTime: {
+                        gt: appointment.startTime
+                    }
+
+                }
+
+            });
+
+
+        if (conflict) {
+
+            const error =
+                new Error(
+                    "This technician is already booked during this appointment time"
+                );
+
+            error.statusCode = 409;
+
+            throw error;
+        }
+
+
+        const updatedAppointment =
+            await prisma.appointment.update({
+
+                where: {
+                    id: appointmentId
+                },
+
+                data: {
+                    technicianId
+                },
+
+                include: {
+                    customer: true,
+                    lead: true,
+                    technician: true
+                }
+
+            });
+
+
+        return updatedAppointment;
+    };
+
+
+// ============================================================
+// EXPORTS
+// ============================================================
 
 module.exports = {
     createAppointment,
@@ -1082,5 +1215,7 @@ module.exports = {
     getAppointmentById,
     getBookedAppointmentByLeadId,
     cancelAppointment,
-    rescheduleAppointment
+    rescheduleAppointment,
+    getActiveTechnicians,
+    assignTechnician
 };

@@ -78,11 +78,13 @@ model Appointment {
 
   customer   Customer    @relation(fields: [customerId], references: [id])
   lead       Lead        @relation(fields: [leadId], references: [id])
-  technician   Technician?       @relation(fields: [technicianId], references: [id], onDelete: Restrict)
+  technician Technician? @relation(fields: [technicianId], references: [id], onDelete: Restrict)
 
   @@index([customerId])
   @@index([startTime])
   @@index([technicianId])
+  @@index([status, startTime])
+  @@index([technicianId, startTime])
 }
 
 model Conversation {
