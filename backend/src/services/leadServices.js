@@ -109,48 +109,163 @@ const createLeadFromConversation = async ({
         return lead;
     });
 };
+
 const getAllLeads = async ({
+    search = "",
     status,
     urgency,
     page = 1,
     limit = 10
 }) => {
-    const skip = (page - 1) * limit;
+
+    const safePage =
+        Math.max(
+            1,
+            Number(page) || 1
+        );
+
+    const safeLimit =
+        Math.min(
+            50,
+            Math.max(
+                1,
+                Number(limit) || 10
+            )
+        );
+
+    const skip =
+        (safePage - 1) *
+        safeLimit;
+
 
     const where = {};
+
+
+    /*
+     * STATUS
+     */
 
     if (status) {
         where.status = status;
     }
 
+
+    /*
+     * URGENCY
+     */
+
     if (urgency) {
         where.urgency = urgency;
     }
 
-    const [leads, total] = await Promise.all([
+
+    /*
+     * SERVER-SIDE SEARCH
+     */
+
+    const normalizedSearch =
+        search.trim();
+
+
+    if (normalizedSearch) {
+
+        where.OR = [
+            {
+                customer: {
+                    name: {
+                        contains:
+                            normalizedSearch,
+                        mode: "insensitive"
+                    }
+                }
+            },
+
+            {
+                customer: {
+                    phone: {
+                        contains:
+                            normalizedSearch
+                    }
+                }
+            },
+
+            {
+                customer: {
+                    email: {
+                        contains:
+                            normalizedSearch,
+                        mode: "insensitive"
+                    }
+                }
+            },
+
+            {
+                service: {
+                    contains:
+                        normalizedSearch,
+                        mode: "insensitive"
+                }
+            }
+        ];
+    }
+
+
+    /*
+     * FETCH + COUNT
+     */
+
+    const [
+        leads,
+        total
+    ] = await Promise.all([
+
         prisma.lead.findMany({
             where,
-            include: {
-                customer: true
+
+            select: {
+                id: true,
+                service: true,
+                problemDescription: true,
+                urgency: true,
+                status: true,
+                createdAt: true,
+
+                customer: {
+                    select: {
+                        id: true,
+                        name: true,
+                        phone: true,
+                        email: true,
+                        address: true
+                    }
+                }
             },
+
             orderBy: {
                 createdAt: "desc"
             },
+
             skip,
-            take: limit
+            take: safeLimit
         }),
+
 
         prisma.lead.count({
             where
         })
+
     ]);
+
 
     return {
         leads,
         total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit)
+        page: safePage,
+        limit: safeLimit,
+        totalPages:
+            Math.ceil(
+                total / safeLimit
+            )
     };
 };
 

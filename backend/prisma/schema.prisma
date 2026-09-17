@@ -60,6 +60,8 @@ model Lead {
   @@index([customerId])
   @@index([status])
   @@index([urgency])
+  @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 model Appointment {

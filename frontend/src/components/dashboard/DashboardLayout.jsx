@@ -28,6 +28,11 @@ const navigationItems = [
         path: "/admin/appointments",
         icon: CalendarDays,
     },
+    {
+        label: "Customers",
+        path: "/admin/customers",
+        icon: Users,
+    },
 ];
 
 const bottomNavigationItems = [

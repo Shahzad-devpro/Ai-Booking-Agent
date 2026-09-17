@@ -1,10 +1,10 @@
-
 const API_BASE_URL =
     import.meta.env.VITE_API_BASE_URL ||
     "http://localhost:5000/api";
 
 
 const getAuthHeaders = () => {
+
     const token =
         localStorage.getItem("authToken");
 
@@ -15,31 +15,92 @@ const getAuthHeaders = () => {
     }
 
     return {
-        Authorization: `Bearer ${token}`,
+        Authorization:
+            `Bearer ${token}`
     };
 };
 
 
+const handleResponse = async (
+    response
+) => {
+
+    const data =
+        await response.json();
+
+    if (!response.ok) {
+
+        if (
+            response.status === 401
+        ) {
+            localStorage.removeItem(
+                "authToken"
+            );
+
+            localStorage.removeItem(
+                "authUser"
+            );
+
+            window.location.href =
+                "/admin/login";
+        }
+
+        throw new Error(
+            data.message ||
+            "Request failed"
+        );
+    }
+
+    return data;
+};
+
+
 const getLeads = async ({
-    status,
-    urgency,
+    search = "",
+    status = "",
+    urgency = "",
     page = 1,
-    limit = 10,
+    limit = 10
 } = {}) => {
 
     const params =
         new URLSearchParams();
 
-    params.set("page", page);
-    params.set("limit", limit);
+
+    params.set(
+        "page",
+        String(page)
+    );
+
+    params.set(
+        "limit",
+        String(limit)
+    );
+
+
+    if (search.trim()) {
+        params.set(
+            "search",
+            search.trim()
+        );
+    }
+
 
     if (status) {
-        params.set("status", status);
+        params.set(
+            "status",
+            status
+        );
     }
 
+
     if (urgency) {
-        params.set("urgency", urgency);
+        params.set(
+            "urgency",
+            urgency
+        );
     }
+
 
     const response =
         await fetch(
@@ -47,32 +108,21 @@ const getLeads = async ({
             {
                 method: "GET",
                 headers: {
-                    ...getAuthHeaders(),
-                },
+                    ...getAuthHeaders()
+                }
             }
         );
 
-    const data =
-        await response.json();
 
-    if (!response.ok) {
-
-        if (response.status === 401) {
-            localStorage.removeItem("authToken");
-            localStorage.removeItem("authUser");
-        }
-
-        throw new Error(
-            data.message ||
-            "Failed to fetch leads"
-        );
-    }
-
-    return data;
+    return handleResponse(
+        response
+    );
 };
 
 
-const getLeadById = async (leadId) => {
+const getLeadById = async (
+    leadId
+) => {
 
     if (!leadId) {
         throw new Error(
@@ -80,34 +130,22 @@ const getLeadById = async (leadId) => {
         );
     }
 
+
     const response =
         await fetch(
             `${API_BASE_URL}/leads/${leadId}`,
             {
                 method: "GET",
                 headers: {
-                    ...getAuthHeaders(),
-                },
+                    ...getAuthHeaders()
+                }
             }
         );
 
-    const data =
-        await response.json();
 
-    if (!response.ok) {
-
-        if (response.status === 401) {
-            localStorage.removeItem("authToken");
-            localStorage.removeItem("authUser");
-        }
-
-        throw new Error(
-            data.message ||
-            "Failed to fetch lead"
-        );
-    }
-
-    return data;
+    return handleResponse(
+        response
+    );
 };
 
 
@@ -122,11 +160,13 @@ const updateLeadStatus = async (
         );
     }
 
+
     if (!status) {
         throw new Error(
             "Lead status is required"
         );
     }
+
 
     const response =
         await fetch(
@@ -137,38 +177,26 @@ const updateLeadStatus = async (
                 headers: {
                     "Content-Type":
                         "application/json",
-                    ...getAuthHeaders(),
+
+                    ...getAuthHeaders()
                 },
 
                 body: JSON.stringify({
-                    status,
-                }),
+                    status
+                })
             }
         );
 
-    const data =
-        await response.json();
 
-    if (!response.ok) {
-
-        if (response.status === 401) {
-            localStorage.removeItem("authToken");
-            localStorage.removeItem("authUser");
-        }
-
-        throw new Error(
-            data.message ||
-            "Failed to update lead status"
-        );
-    }
-
-    return data;
+    return handleResponse(
+        response
+    );
 };
 
 
 export {
     getLeads,
     getLeadById,
-    updateLeadStatus,
+    updateLeadStatus
 };
 

@@ -1,20 +1,24 @@
-
-import { useEffect, useState } from "react";
+import {
+    useEffect,
+    useState,
+} from "react";
 
 import {
     AlertCircle,
     ChevronLeft,
     ChevronRight,
-    Filter,
     Loader2,
     Search,
     Users,
 } from "lucide-react";
 
 import DashboardLayout from "../../components/dashboard/DashboardLayout";
+import LeadDetails from "../../pages/dashboard/LeadDetails";
 
 import {
     getLeads,
+    getLeadById,
+    updateLeadStatus,
 } from "../../services/leadApi";
 
 
@@ -75,8 +79,10 @@ const formatService = (service) => {
     return service
         .replace(/_/g, " ")
         .toLowerCase()
-        .replace(/\b\w/g, (letter) =>
-            letter.toUpperCase()
+        .replace(
+            /\b\w/g,
+            (letter) =>
+                letter.toUpperCase()
         );
 };
 
@@ -94,11 +100,15 @@ const formatDate = (date) => {
             day: "numeric",
             year: "numeric",
         }
-    ).format(new Date(date));
+    ).format(
+        new Date(date)
+    );
 };
 
 
-const getStatusClasses = (status) => {
+const getStatusClasses = (
+    status
+) => {
 
     switch (status) {
 
@@ -123,7 +133,9 @@ const getStatusClasses = (status) => {
 };
 
 
-const getUrgencyClasses = (urgency) => {
+const getUrgencyClasses = (
+    urgency
+) => {
 
     switch (urgency) {
 
@@ -133,9 +145,6 @@ const getUrgencyClasses = (urgency) => {
         case "HIGH":
             return "bg-orange-50 text-orange-700";
 
-        case "NORMAL":
-            return "bg-slate-100 text-slate-600";
-
         default:
             return "bg-slate-100 text-slate-600";
     }
@@ -144,7 +153,12 @@ const getUrgencyClasses = (urgency) => {
 
 const Leads = () => {
 
-    const [leads, setLeads] = useState([]);
+    /*
+     * LEAD DATA
+     */
+
+    const [leads, setLeads] =
+        useState([]);
 
     const [loading, setLoading] =
         useState(true);
@@ -152,11 +166,35 @@ const Leads = () => {
     const [error, setError] =
         useState("");
 
+
+    /*
+     * FILTERS
+     */
+
     const [status, setStatus] =
         useState("");
 
     const [urgency, setUrgency] =
         useState("");
+
+
+    /*
+     * SEARCH
+     *
+     * searchInput = what user is typing
+     * search = debounced server query
+     */
+
+    const [searchInput, setSearchInput] =
+        useState("");
+
+    const [search, setSearch] =
+        useState("");
+
+
+    /*
+     * PAGINATION
+     */
 
     const [page, setPage] =
         useState(1);
@@ -170,74 +208,313 @@ const Leads = () => {
         });
 
 
-    const fetchLeads = async () => {
+    /*
+     * LEAD DETAILS
+     */
+
+    const [selectedLead, setSelectedLead] =
+        useState(null);
+
+    const [leadLoading, setLeadLoading] =
+        useState(false);
+
+
+    /*
+     * STATUS UPDATE
+     */
+
+    const [updatingStatus, setUpdatingStatus] =
+        useState(false);
+
+
+    /*
+     * DEBOUNCE SEARCH
+     *
+     * Wait 300ms after the user
+     * stops typing before querying API.
+     */
+
+    useEffect(() => {
+
+        const timer =
+            setTimeout(() => {
+
+                setSearch(
+                    searchInput.trim()
+                );
+
+                setPage(1);
+
+            }, 300);
+
+
+        return () => {
+            clearTimeout(timer);
+        };
+
+    }, [searchInput]);
+
+
+    /*
+     * FETCH LEADS
+     */
+
+    useEffect(() => {
+
+        let cancelled = false;
+
+
+        const fetchLeads = async () => {
+
+            try {
+
+                setLoading(true);
+                setError("");
+
+
+                const response =
+                    await getLeads({
+                        search,
+                        status,
+                        urgency,
+                        page,
+                        limit: 10,
+                    });
+
+
+                if (cancelled) {
+                    return;
+                }
+
+
+                setLeads(
+                    response?.data?.leads ||
+                    []
+                );
+
+
+                setPagination({
+                    total:
+                        response?.data?.total ||
+                        0,
+
+                    page:
+                        response?.data?.page ||
+                        page,
+
+                    limit:
+                        response?.data?.limit ||
+                        10,
+
+                    totalPages:
+                        response?.data?.totalPages ||
+                        1,
+                });
+
+            } catch (err) {
+
+                if (cancelled) {
+                    return;
+                }
+
+
+                console.error(
+                    "Failed to fetch leads:",
+                    err
+                );
+
+
+                setError(
+                    err.message ||
+                    "Failed to load leads"
+                );
+
+            } finally {
+
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        };
+
+
+        fetchLeads();
+
+
+        return () => {
+            cancelled = true;
+        };
+
+    }, [
+        search,
+        status,
+        urgency,
+        page,
+    ]);
+
+
+    /*
+     * OPEN LEAD DETAILS
+     */
+
+    const openLead = async (
+        leadId
+    ) => {
 
         try {
 
-            setLoading(true);
+            setLeadLoading(true);
             setError("");
 
+
+            /*
+             * IMPORTANT:
+             *
+             * Do NOT clear selectedLead here.
+             *
+             * This allows the drawer to remain
+             * mounted while the new lead loads.
+             */
+
             const response =
-                await getLeads({
-                    status,
-                    urgency,
-                    page,
-                    limit: 10,
-                });
+                await getLeadById(
+                    leadId
+                );
 
-            setLeads(
-                response?.data?.leads || []
+
+            if (!response?.data) {
+
+                throw new Error(
+                    "Lead data was not returned by the server"
+                );
+            }
+
+
+            setSelectedLead(
+                response.data
             );
-
-            setPagination({
-                total:
-                    response?.data?.total || 0,
-
-                page:
-                    response?.data?.page || page,
-
-                limit:
-                    response?.data?.limit || 10,
-
-                totalPages:
-                    response?.data?.totalPages || 1,
-            });
 
         } catch (err) {
 
             console.error(
-                "Failed to fetch leads:",
+                "Failed to fetch lead:",
                 err
             );
 
+
             setError(
                 err.message ||
-                "Failed to load leads"
+                "Failed to load lead"
             );
 
         } finally {
 
-            setLoading(false);
+            setLeadLoading(false);
         }
     };
 
 
-    useEffect(() => {
-        fetchLeads();
-    }, [status, urgency, page]);
+    /*
+     * UPDATE STATUS
+     */
+
+    const handleStatusChange = async (
+        newStatus
+    ) => {
+
+        if (
+            !selectedLead ||
+            newStatus ===
+                selectedLead.status
+        ) {
+            return;
+        }
 
 
-    const handleStatusChange = (value) => {
+        try {
+
+            setUpdatingStatus(true);
+            setError("");
+
+
+            const response =
+                await updateLeadStatus(
+                    selectedLead.id,
+                    newStatus
+                );
+
+
+            const updatedLead =
+                response?.data;
+
+
+            if (updatedLead) {
+
+                setSelectedLead(
+                    updatedLead
+                );
+
+
+                setLeads(
+                    (currentLeads) =>
+                        currentLeads.map(
+                            (lead) =>
+                                lead.id ===
+                                updatedLead.id
+                                    ? {
+                                        ...lead,
+                                        ...updatedLead,
+                                    }
+                                    : lead
+                        )
+                );
+            }
+
+        } catch (err) {
+
+            console.error(
+                "Failed to update lead status:",
+                err
+            );
+
+
+            setError(
+                err.message ||
+                "Failed to update lead status"
+            );
+
+        } finally {
+
+            setUpdatingStatus(false);
+        }
+    };
+
+
+    /*
+     * FILTER HANDLERS
+     */
+
+    const handleStatusFilter = (
+        value
+    ) => {
+
         setStatus(value);
         setPage(1);
     };
 
 
-    const handleUrgencyChange = (value) => {
+    const handleUrgencyFilter = (
+        value
+    ) => {
+
         setUrgency(value);
         setPage(1);
     };
 
+
+    /*
+     * PAGINATION
+     */
 
     const handlePreviousPage = () => {
 
@@ -268,13 +545,45 @@ const Leads = () => {
     };
 
 
+    /*
+     * CLOSE DRAWER
+     */
+
+    const handleCloseDrawer = () => {
+
+        setSelectedLead(null);
+        setLeadLoading(false);
+    };
+
+
+    /*
+     * PAGINATION DISPLAY
+     */
+
+    const firstVisibleLead =
+        pagination.total === 0
+            ? 0
+            : (page - 1) *
+                pagination.limit +
+                1;
+
+
+    const lastVisibleLead =
+        Math.min(
+            page *
+                pagination.limit,
+            pagination.total
+        );
+
+
     return (
         <DashboardLayout
             activePath="/admin/leads"
         >
             <div className="min-h-screen">
 
-                {/* PAGE HEADER */}
+
+                {/* HEADER */}
 
                 <div className="border-b border-slate-200 bg-white">
 
@@ -298,6 +607,7 @@ const Leads = () => {
 
                             </div>
 
+
                             <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
 
                                 <Users
@@ -305,7 +615,10 @@ const Leads = () => {
                                     className="text-sky-500"
                                 />
 
-                                {pagination.total}{" "}
+                                {pagination.total}
+
+                                {" "}
+
                                 total leads
 
                             </div>
@@ -321,45 +634,72 @@ const Leads = () => {
 
                 <div className="px-5 py-6 sm:px-8 lg:px-10">
 
-                    {/* FILTERS */}
+
+                    {/* FILTER BAR */}
 
                     <div className="rounded-2xl border border-slate-200 bg-white p-4">
 
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                        <div className="flex flex-col gap-3 lg:flex-row">
 
-                            <div className="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+
+                            {/* SEARCH */}
+
+                            <div className="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3">
 
                                 <Search
                                     size={17}
-                                    className="text-slate-400"
+                                    className="shrink-0 text-slate-400"
                                 />
 
-                                <span className="text-sm text-slate-400">
-                                    Search will be added in the next step
-                                </span>
+                                <input
+                                    type="text"
+                                    value={searchInput}
+                                    onChange={(
+                                        event
+                                    ) =>
+                                        setSearchInput(
+                                            event.target.value
+                                        )
+                                    }
+                                    placeholder="Search name, phone, email or service..."
+                                    className="min-w-0 flex-1 bg-transparent py-2.5 text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
+                                />
+
+                                {searchInput && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSearchInput("");
+                                        }}
+                                        className="shrink-0 text-xs font-bold text-slate-400 hover:text-slate-700"
+                                        aria-label="Clear search"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
 
                             </div>
 
 
-                            <div className="flex items-center gap-2">
+                            {/* FILTERS */}
 
-                                <div className="hidden items-center gap-2 text-xs font-semibold text-slate-400 sm:flex">
-                                    <Filter size={15} />
-                                    Filters
-                                </div>
-
+                            <div className="flex flex-col gap-2 sm:flex-row">
 
                                 <select
                                     value={status}
-                                    onChange={(event) =>
-                                        handleStatusChange(
+                                    onChange={(
+                                        event
+                                    ) =>
+                                        handleStatusFilter(
                                             event.target.value
                                         )
                                     }
-                                    className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-600 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                                    className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-600 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                                 >
+
                                     {STATUS_OPTIONS.map(
                                         (option) => (
+
                                             <option
                                                 key={
                                                     option.value
@@ -372,22 +712,28 @@ const Leads = () => {
                                                     option.label
                                                 }
                                             </option>
+
                                         )
                                     )}
+
                                 </select>
 
 
                                 <select
                                     value={urgency}
-                                    onChange={(event) =>
-                                        handleUrgencyChange(
+                                    onChange={(
+                                        event
+                                    ) =>
+                                        handleUrgencyFilter(
                                             event.target.value
                                         )
                                     }
-                                    className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-600 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                                    className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-600 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                                 >
+
                                     {URGENCY_OPTIONS.map(
                                         (option) => (
+
                                             <option
                                                 key={
                                                     option.value
@@ -400,8 +746,10 @@ const Leads = () => {
                                                     option.label
                                                 }
                                             </option>
+
                                         )
                                     )}
+
                                 </select>
 
                             </div>
@@ -414,6 +762,7 @@ const Leads = () => {
                     {/* ERROR */}
 
                     {error && (
+
                         <div className="mt-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4">
 
                             <AlertCircle
@@ -421,10 +770,10 @@ const Leads = () => {
                                 className="mt-0.5 shrink-0 text-red-500"
                             />
 
-                            <div>
+                            <div className="min-w-0">
 
                                 <p className="text-sm font-bold text-red-700">
-                                    Unable to load leads
+                                    Something went wrong
                                 </p>
 
                                 <p className="mt-1 text-xs text-red-600">
@@ -434,6 +783,7 @@ const Leads = () => {
                             </div>
 
                         </div>
+
                     )}
 
 
@@ -473,268 +823,164 @@ const Leads = () => {
                                 </h2>
 
                                 <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
-                                    Try changing your filters or wait for your AI receptionist to capture a new customer inquiry.
+                                    Try changing your filters or search terms.
                                 </p>
 
                             </div>
 
                         ) : (
 
-                            <>
+                            <div className="overflow-x-auto">
 
-                                {/* DESKTOP TABLE */}
+                                <table className="w-full min-w-[850px]">
 
-                                <div className="hidden overflow-x-auto md:block">
+                                    <thead className="border-b border-slate-200 bg-slate-50">
 
-                                    <table className="w-full min-w-[850px]">
+                                        <tr>
 
-                                        <thead className="border-b border-slate-200 bg-slate-50">
+                                            <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                                Customer
+                                            </th>
 
-                                            <tr>
+                                            <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                                Service
+                                            </th>
 
-                                                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                                                    Customer
-                                                </th>
+                                            <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                                Urgency
+                                            </th>
 
-                                                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                                                    Service
-                                                </th>
+                                            <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                                Status
+                                            </th>
 
-                                                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                                                    Urgency
-                                                </th>
+                                            <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                                                Created
+                                            </th>
 
-                                                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                                                    Status
-                                                </th>
+                                        </tr>
 
-                                                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                                                    Created
-                                                </th>
-
-                                            </tr>
-
-                                        </thead>
+                                    </thead>
 
 
-                                        <tbody className="divide-y divide-slate-100">
+                                    <tbody className="divide-y divide-slate-100">
 
-                                            {leads.map(
-                                                (lead) => (
+                                        {leads.map(
+                                            (lead) => (
 
-                                                    <tr
-                                                        key={
+                                                <tr
+                                                    key={
+                                                        lead.id
+                                                    }
+                                                    onClick={() =>
+                                                        openLead(
                                                             lead.id
-                                                        }
-                                                        className="transition hover:bg-slate-50"
-                                                    >
+                                                        )
+                                                    }
+                                                    className="cursor-pointer transition hover:bg-slate-50"
+                                                >
 
-                                                        <td className="px-5 py-4">
+                                                    <td className="px-5 py-4">
 
-                                                            <div className="flex items-center gap-3">
+                                                        <div className="flex items-center gap-3">
 
-                                                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-50 text-xs font-bold text-sky-700">
-                                                                    {lead
-                                                                        .customer
-                                                                        ?.name
-                                                                        ?.charAt(
-                                                                            0
-                                                                        )
-                                                                        ?.toUpperCase() ||
-                                                                        "?"}
-                                                                </div>
+                                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-50 text-xs font-bold text-sky-700">
 
-                                                                <div className="min-w-0">
-
-                                                                    <p className="truncate text-sm font-bold text-slate-800">
-                                                                        {
-                                                                            lead
-                                                                                .customer
-                                                                                ?.name
-                                                                        }
-                                                                    </p>
-
-                                                                    <p className="truncate text-xs text-slate-400">
-                                                                        {
-                                                                            lead
-                                                                                .customer
-                                                                                ?.phone
-                                                                        }
-                                                                    </p>
-
-                                                                </div>
+                                                                {lead.customer?.name
+                                                                    ?.charAt(
+                                                                        0
+                                                                    )
+                                                                    ?.toUpperCase() ||
+                                                                    "?"}
 
                                                             </div>
 
-                                                        </td>
+
+                                                            <div className="min-w-0">
+
+                                                                <p className="truncate text-sm font-bold text-slate-800">
+
+                                                                    {lead.customer?.name ||
+                                                                        "Unknown"}
+
+                                                                </p>
 
 
-                                                        <td className="px-5 py-4">
+                                                                <p className="truncate text-xs text-slate-400">
 
-                                                            <span className="text-sm font-semibold text-slate-700">
-                                                                {formatService(
-                                                                    lead.service
-                                                                )}
-                                                            </span>
+                                                                    {lead.customer?.phone ||
+                                                                        "—"}
 
-                                                        </td>
+                                                                </p>
 
-
-                                                        <td className="px-5 py-4">
-
-                                                            <span
-                                                                className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${getUrgencyClasses(
-                                                                    lead.urgency
-                                                                )}`}
-                                                            >
-                                                                {
-                                                                    lead.urgency
-                                                                }
-                                                            </span>
-
-                                                        </td>
-
-
-                                                        <td className="px-5 py-4">
-
-                                                            <span
-                                                                className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ${getStatusClasses(
-                                                                    lead.status
-                                                                )}`}
-                                                            >
-                                                                {lead.status
-                                                                    ?.replace(
-                                                                        /_/g,
-                                                                        " "
-                                                                    )}
-                                                            </span>
-
-                                                        </td>
-
-
-                                                        <td className="px-5 py-4 text-sm font-medium text-slate-500">
-
-                                                            {formatDate(
-                                                                lead.createdAt
-                                                            )}
-
-                                                        </td>
-
-                                                    </tr>
-
-                                                )
-                                            )}
-
-                                        </tbody>
-
-                                    </table>
-
-                                </div>
-
-
-                                {/* MOBILE CARDS */}
-
-                                <div className="divide-y divide-slate-100 md:hidden">
-
-                                    {leads.map(
-                                        (lead) => (
-
-                                            <div
-                                                key={
-                                                    lead.id
-                                                }
-                                                className="p-4"
-                                            >
-
-                                                <div className="flex items-start justify-between gap-3">
-
-                                                    <div className="flex min-w-0 items-center gap-3">
-
-                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sm font-bold text-sky-700">
-
-                                                            {lead
-                                                                .customer
-                                                                ?.name
-                                                                ?.charAt(
-                                                                    0
-                                                                )
-                                                                ?.toUpperCase() ||
-                                                                "?"}
+                                                            </div>
 
                                                         </div>
 
-                                                        <div className="min-w-0">
-
-                                                            <p className="truncate text-sm font-bold text-slate-800">
-                                                                {
-                                                                    lead
-                                                                        .customer
-                                                                        ?.name
-                                                                }
-                                                            </p>
-
-                                                            <p className="truncate text-xs text-slate-400">
-                                                                {
-                                                                    lead
-                                                                        .customer
-                                                                        ?.phone
-                                                                }
-                                                            </p>
-
-                                                        </div>
-
-                                                    </div>
+                                                    </td>
 
 
-                                                    <span
-                                                        className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${getStatusClasses(
-                                                            lead.status
-                                                        )}`}
-                                                    >
-                                                        {lead.status
-                                                            ?.replace(
-                                                                /_/g,
-                                                                " "
-                                                            )}
-                                                    </span>
+                                                    <td className="px-5 py-4 text-sm font-semibold text-slate-700">
 
-                                                </div>
-
-
-                                                <div className="mt-4 flex flex-wrap items-center gap-2">
-
-                                                    <span className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
                                                         {formatService(
                                                             lead.service
                                                         )}
-                                                    </span>
 
-                                                    <span
-                                                        className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${getUrgencyClasses(
-                                                            lead.urgency
-                                                        )}`}
-                                                    >
-                                                        {
-                                                            lead.urgency
-                                                        }
-                                                    </span>
+                                                    </td>
 
-                                                    <span className="text-xs text-slate-400">
+
+                                                    <td className="px-5 py-4">
+
+                                                        <span
+                                                            className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${getUrgencyClasses(
+                                                                lead.urgency
+                                                            )}`}
+                                                        >
+
+                                                            {lead.urgency ||
+                                                                "NORMAL"}
+
+                                                        </span>
+
+                                                    </td>
+
+
+                                                    <td className="px-5 py-4">
+
+                                                        <span
+                                                            className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ${getStatusClasses(
+                                                                lead.status
+                                                            )}`}
+                                                        >
+
+                                                            {lead.status?.replace(
+                                                                /_/g,
+                                                                " "
+                                                            )}
+
+                                                        </span>
+
+                                                    </td>
+
+
+                                                    <td className="px-5 py-4 text-sm font-medium text-slate-500">
+
                                                         {formatDate(
                                                             lead.createdAt
                                                         )}
-                                                    </span>
 
-                                                </div>
+                                                    </td>
 
-                                            </div>
+                                                </tr>
 
-                                        )
-                                    )}
+                                            )
+                                        )}
 
-                                </div>
+                                    </tbody>
 
-                            </>
+                                </table>
+
+                            </div>
 
                         )}
 
@@ -744,7 +990,8 @@ const Leads = () => {
                     {/* PAGINATION */}
 
                     {!loading &&
-                        leads.length > 0 && (
+                        pagination.total > 0 && (
+
                             <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
 
                                 <p className="text-xs font-medium text-slate-400">
@@ -752,27 +999,19 @@ const Leads = () => {
                                     Showing{" "}
 
                                     <span className="font-bold text-slate-600">
-                                        {(page - 1) *
-                                            pagination.limit +
-                                            1}
+                                        {firstVisibleLead}
                                     </span>
 
                                     {" "}–{" "}
 
                                     <span className="font-bold text-slate-600">
-                                        {Math.min(
-                                            page *
-                                                pagination.limit,
-                                            pagination.total
-                                        )}
+                                        {lastVisibleLead}
                                     </span>
 
                                     {" "}of{" "}
 
                                     <span className="font-bold text-slate-600">
-                                        {
-                                            pagination.total
-                                        }
+                                        {pagination.total}
                                     </span>
 
                                 </p>
@@ -786,23 +1025,29 @@ const Leads = () => {
                                             handlePreviousPage
                                         }
                                         disabled={
-                                            page <=
-                                            1
+                                            page <= 1
                                         }
                                         className="flex h-9 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
+
                                         <ChevronLeft
                                             size={15}
                                         />
+
                                         Previous
+
                                     </button>
 
 
                                     <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600">
-                                        Page {page} of{" "}
+
+                                        Page{" "}
+                                        {page}
+                                        {" "}of{" "}
                                         {
                                             pagination.totalPages
                                         }
+
                                     </span>
 
 
@@ -817,24 +1062,58 @@ const Leads = () => {
                                         }
                                         className="flex h-9 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
+
                                         Next
+
                                         <ChevronRight
                                             size={15}
                                         />
+
                                     </button>
 
                                 </div>
 
                             </div>
+
                         )}
 
                 </div>
 
             </div>
+
+
+            {/* LEAD DETAILS DRAWER */}
+
+            {(selectedLead ||
+                leadLoading) && (
+
+                <LeadDetails
+                    lead={
+                        selectedLead
+                    }
+
+                    loading={
+                        leadLoading
+                    }
+
+                    onClose={
+                        handleCloseDrawer
+                    }
+
+                    onStatusChange={
+                        handleStatusChange
+                    }
+
+                    updatingStatus={
+                        updatingStatus
+                    }
+                />
+
+            )}
+
         </DashboardLayout>
     );
 };
 
 
 export default Leads;
-

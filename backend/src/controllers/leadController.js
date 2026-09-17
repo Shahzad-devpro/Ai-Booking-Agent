@@ -21,52 +21,70 @@ const createLead = async (req,res) => {
 
 const getAllLeads = async (req, res, next) => {
     try {
+
         const {
+            search = "",
             status,
             urgency,
             page = "1",
             limit = "10"
         } = req.query;
 
-        const result = await leadService.getAllLeads({
-            status,
-            urgency,
-            page: Number(page),
-            limit: Number(limit)
-        });
+
+        const result =
+            await leadService.getAllLeads({
+                search,
+                status,
+                urgency,
+                page: Number(page),
+                limit: Number(limit)
+            });
+
 
         res.status(200).json({
             success: true,
             data: result
         });
+
     } catch (error) {
         next(error);
     }
 };
 
-const getLeadById = async (req,res) => {
-    try{
-        const lead = await leadService.getLeadById(req.params.id);
 
-        if(!lead) {
+const getLeadById = async (req, res) => {
+    try {
+        const lead =
+            await leadService.getLeadById(
+                req.params.id
+            );
+
+        if (!lead) {
             return res.status(404).json({
                 success: false,
                 message: "Lead not found"
             });
-        } 
+        }
+
         res.status(200).json({
             success: true,
-            Data: lead
+            data: lead
         });
-    } catch(error){
-        console.log("Get lead error",error);
+
+    } catch (error) {
+        console.log(
+            "Get lead error:",
+            error
+        );
 
         res.status(500).json({
             success: false,
-            message: "failed to fetch lead"
+            message: "Failed to fetch lead"
         });
     }
 };
+
+
 
 const updateLeadStatus = async(req, res) => {
     try{
