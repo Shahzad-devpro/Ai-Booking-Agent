@@ -42,6 +42,8 @@ model Customer {
   updatedAt    DateTime      @updatedAt
   appointments Appointment[]
   leads        Lead[]
+
+  @@index([createdAt])
 }
 
 model Lead {

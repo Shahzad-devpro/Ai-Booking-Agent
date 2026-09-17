@@ -7,6 +7,7 @@ const authRoutes = require("./routes/authRoutes");
 const adminRoutes = require("./routes/adminRoute");
 const appointmentRoutes = require("./routes/appointmentRoutes");
 const chatRoutes = require("./routes/chatRoutes");
+const customerRoutes = require("./routes/customerRoutes");
 
 const errorHandler = require("./middleware/errorHandler");
 const app = express();
@@ -27,7 +28,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/chat", chatRoutes);
-
+app.use("/api/customers", customerRoutes);
 
 app.use(errorHandler);
 module.exports = app;

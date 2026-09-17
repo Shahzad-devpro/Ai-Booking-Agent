@@ -6,6 +6,7 @@ import {
     LogOut,
     Menu,
     Settings,
+    UserRound,
     Users,
     X,
 } from "lucide-react";
@@ -31,7 +32,7 @@ const navigationItems = [
     {
         label: "Customers",
         path: "/admin/customers",
-        icon: Users,
+        icon: UserRound,
     },
 ];
 
@@ -103,7 +104,9 @@ const DashboardLayout = ({
                             >
                                 <Icon
                                     size={18}
-                                    strokeWidth={active ? 2.3 : 2}
+                                    strokeWidth={
+                                        active ? 2.3 : 2
+                                    }
                                     className={
                                         active
                                             ? "text-sky-600"
@@ -150,7 +153,9 @@ const DashboardLayout = ({
                             >
                                 <Icon
                                     size={18}
-                                    strokeWidth={active ? 2.3 : 2}
+                                    strokeWidth={
+                                        active ? 2.3 : 2
+                                    }
                                     className={
                                         active
                                             ? "text-sky-600"
@@ -161,6 +166,13 @@ const DashboardLayout = ({
                                 <span className="flex-1">
                                     {item.label}
                                 </span>
+
+                                {active && (
+                                    <ChevronRight
+                                        size={15}
+                                        className="text-sky-400"
+                                    />
+                                )}
                             </a>
                         );
                     })}
@@ -181,7 +193,8 @@ const DashboardLayout = ({
 
                     <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-bold text-slate-800">
-                            {user?.name || "Administrator"}
+                            {user?.name ||
+                                "Administrator"}
                         </p>
 
                         <p className="truncate text-[10px] text-slate-400">
@@ -243,6 +256,7 @@ const DashboardLayout = ({
                     />
 
                     <aside className="relative h-full w-72 max-w-[85vw] bg-white shadow-xl">
+
                         <button
                             type="button"
                             onClick={() =>
@@ -255,6 +269,7 @@ const DashboardLayout = ({
                         </button>
 
                         {sidebarContent}
+
                     </aside>
                 </div>
             )}
@@ -263,9 +278,9 @@ const DashboardLayout = ({
             <main className="min-h-screen lg:pl-64">
                 {children}
             </main>
+
         </div>
     );
 };
 
 export default DashboardLayout;
-
