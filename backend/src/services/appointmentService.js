@@ -10,6 +10,11 @@ const {
     SLOT_DURATION_HOURS
 } = require("../config/businessConfig");
 
+const {
+    notifyAppointmentBooked,
+    notifyAppointmentCancelled,
+    notifyAppointmentRescheduled
+} = require("./notificationService");
 
 // ============================================================
 // HELPERS
@@ -419,9 +424,16 @@ const createAppointment =
             );
 
 
-        return getAppointmentById(
-            appointment.id
-        );
+       const completeAppointment =
+    await getAppointmentById(
+        appointment.id
+    );
+
+await notifyAppointmentBooked(
+    completeAppointment
+);
+
+return completeAppointment;
 };
 
 
@@ -839,9 +851,16 @@ const cancelAppointment =
         );
 
 
-        return getAppointmentById(
-            id
-        );
+       const cancelledAppointment =
+    await getAppointmentById(
+        id
+    );
+
+await notifyAppointmentCancelled(
+    cancelledAppointment
+);
+
+return cancelledAppointment;
 };
 
 
@@ -984,9 +1003,20 @@ const rescheduleAppointment =
         );
 
 
-        return getAppointmentById(
-            appointmentId
-        );
+        const updatedAppointment =
+    await getAppointmentById(
+        appointmentId
+    );
+
+await notifyAppointmentRescheduled({
+    appointment:
+        updatedAppointment,
+
+    previousStartTime:
+        existingAppointment.startTime
+});
+
+return updatedAppointment;
 };
 
 // ============================================================

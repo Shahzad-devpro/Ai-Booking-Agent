@@ -1,4 +1,5 @@
 const prisma = require("../config/database");
+const { notifyLeadCreated } = require("./notificationService");
 const createLead = async (leadData) => {
     const{
         name,
@@ -39,75 +40,113 @@ const createLeadFromConversation = async ({
     leadData
 }) => {
 
-    return prisma.$transaction(async (tx) => {
+    const lead =
+        await prisma.$transaction(
+            async tx => {
 
-        const conversation =
-            await tx.conversation.findUnique({
-                where: {
-                    id: conversationId
+                const conversation =
+                    await tx.conversation.findUnique({
+                        where: {
+                            id: conversationId
+                        }
+                    });
+
+                if (!conversation) {
+                    const error =
+                        new Error(
+                            "Conversation not found"
+                        );
+
+                    error.statusCode = 404;
+
+                    throw error;
                 }
-            });
 
-        if (!conversation) {
-            const error = new Error(
-                "Conversation not found"
-            );
+                // Prevent duplicate lead creation
+                if (conversation.leadId) {
 
-            error.statusCode = 404;
-            throw error;
-        }
+                    const existingLead =
+                        await tx.lead.findUnique({
+                            where: {
+                                id:
+                                    conversation.leadId
+                            },
 
-        // Prevent duplicate lead creation
-        if (conversation.leadId) {
-            const existingLead =
-                await tx.lead.findUnique({
+                            include: {
+                                customer: true
+                            }
+                        });
+
+                    return existingLead;
+                }
+
+                const customer =
+                    await tx.customer.create({
+                        data: {
+                            name:
+                                leadData.customer.name,
+
+                            phone:
+                                leadData.customer.phone,
+
+                            email:
+                                leadData.customer.email,
+
+                            address:
+                                leadData.customer.address
+                        }
+                    });
+
+                const newLead =
+                    await tx.lead.create({
+                        data: {
+
+                            customerId:
+                                customer.id,
+
+                            service:
+                                leadData.service,
+
+                            problemDescription:
+                                leadData.problemDescription,
+
+                            urgency:
+                                leadData.urgency,
+
+                            status:
+                                "AI_QUALIFIED"
+                        },
+
+                        include: {
+                            customer: true
+                        }
+                    });
+
+                await tx.conversation.update({
                     where: {
-                        id: conversation.leadId
+                        id:
+                            conversationId
                     },
-                    include: {
-                        customer: true
+
+                    data: {
+                        leadId:
+                            newLead.id
                     }
                 });
 
-            return existingLead;
-        }
-
-        const customer =
-            await tx.customer.create({
-                data: {
-                    name: leadData.customer.name,
-                    phone: leadData.customer.phone,
-                    email: leadData.customer.email,
-                    address: leadData.customer.address
-                }
-            });
-
-        const lead =
-            await tx.lead.create({
-                data: {
-                    customerId: customer.id,
-                    service: leadData.service,
-                    problemDescription:
-                        leadData.problemDescription,
-                    urgency: leadData.urgency,
-                    status: "AI_QUALIFIED"
-                },
-                include: {
-                    customer: true
-                }
-            });
-
-        await tx.conversation.update({
-            where: {
-                id: conversationId
-            },
-            data: {
-                leadId: lead.id
+                return newLead;
             }
-        });
+        );
 
-        return lead;
-    });
+    /*
+     * Notification is deliberately outside
+     * the database transaction.
+     *
+     * If email fails, lead creation remains successful.
+     */
+    await notifyLeadCreated(lead);
+
+    return lead;
 };
 
 const getAllLeads = async ({

@@ -26,6 +26,9 @@ import Appointments
 import Customers
     from "./pages/dashboard/Customers";
 
+import Settings
+    from "./pages/dashboard/Settings";
+
 const App = () => {
 
     return (
@@ -82,7 +85,15 @@ const App = () => {
                 />
                 <Route
                      path="/admin/customers"
-                     element={<Customers />}
+                     element={
+                     <Customers />
+                    }
+                />
+                <Route
+                path="/admin/settings"
+                element={
+                    <Settings />
+                    }
                 />
 
             </Routes>
