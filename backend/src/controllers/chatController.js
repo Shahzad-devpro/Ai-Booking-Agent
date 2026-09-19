@@ -223,109 +223,16 @@ const chat = async (req, res, next) => {
         // ----------------------------------------------------
 
         const rescheduleIntent =
-    getRescheduleIntent({
+            getRescheduleIntent({
 
-        customerMessage:
-            currentMessage,
+                customerMessage:
+                    currentMessage,
 
-        conversationMessages:
-            conversation.messages
+                conversationMessages:
+                    conversation.messages
 
-    });
+            });
 
-
-        // ----------------------------------------------------
-        // Debug logs
-        // ----------------------------------------------------
-        
-        console.log(
-            "VALIDATED AI DATA:"
-        );
-
-        console.log(
-            JSON.stringify(
-                validatedData,
-                null,
-                2
-            )
-        );
-
-
-        console.log(
-            "APPOINTMENT INTENT:"
-        );
-
-        console.log(
-            JSON.stringify(
-                appointmentIntent,
-                null,
-                2
-            )
-        );
-
-
-        console.log(
-            "BOOKING INTENT:"
-        );
-
-        console.log(
-            JSON.stringify(
-                bookingIntent,
-                null,
-                2
-            )
-        );
-
-
-        console.log(
-            "CANCELLATION INTENT:"
-        );
-
-        console.log(
-            JSON.stringify(
-                cancellationIntent,
-                null,
-                2
-            )
-        );
-
-
-        console.log(
-            "RESCHEDULE INTENT:"
-        );
-
-        console.log(
-            JSON.stringify(
-                rescheduleIntent,
-                null,
-                2
-            )
-        );
-        console.log(
-    "CURRENT CUSTOMER MESSAGE:"
-);
-
-console.log(
-    currentMessage
-);
-
-console.log(
-    "RESCHEDULE CONTEXT MESSAGE:"
-);
-
-const lastAssistantMessage =
-    [...conversation.messages]
-        .reverse()
-        .find(
-            message =>
-                message.role === "ASSISTANT"
-        );
-
-console.log(
-    lastAssistantMessage
-        ? lastAssistantMessage.content
-        : "No previous assistant message"
-);
 
         // ----------------------------------------------------
         // 11. Determine qualification
@@ -345,7 +252,7 @@ console.log(
         //
         // 1. conversation.leadId
         //
-        // 2. Customer phone for existing appointment
+        // 2. Customer information for existing appointment
         //
         // This allows customers to reschedule from a new
         // conversation without repeating all their details.
@@ -375,7 +282,7 @@ console.log(
 
 
         // ----------------------------------------------------
-        // 12B. Existing appointment lookup by phone
+        // 12B. Existing appointment lookup by customer info
         // ----------------------------------------------------
         //
         // Only needed for cancellation/rescheduling when
@@ -393,20 +300,33 @@ console.log(
 
             const customerPhone =
                 validatedData.customer?.phone;
+
             const customerEmail =
                 validatedData.customer?.email;
+
             const customerName =
                 validatedData.customer?.name;
 
 
-            if (customerPhone || customerEmail || customerName) {
+            if (
+                customerPhone ||
+                customerEmail ||
+                customerName
+            ) {
 
                 existingAppointment =
                     await appointmentLookupService
                         .findBookedAppointmentByCustomerInfo({
-                            phone: customerPhone,
-                            email: customerEmail,
-                            name: customerName
+
+                            phone:
+                                customerPhone,
+
+                            email:
+                                customerEmail,
+
+                            name:
+                                customerName
+
                         });
 
 
@@ -420,50 +340,6 @@ console.log(
                 }
 
             }
-
-        }
-
-
-        // ----------------------------------------------------
-        // 12C. Debug existing appointment lookup
-        // ----------------------------------------------------
-
-        if (
-            cancellationIntent.wantsCancellation ||
-            rescheduleIntent.wantsReschedule
-        ) {
-
-            console.log(
-                "EXISTING APPOINTMENT LOOKUP:"
-            );
-
-            console.log(
-
-                existingAppointment
-                    ? JSON.stringify(
-                        {
-                            appointmentId:
-                                existingAppointment.id,
-
-                            leadId:
-                                existingAppointment.leadId,
-
-                            customerId:
-                                existingAppointment.customerId,
-
-                            customerPhone:
-                                existingAppointment.customer?.phone,
-
-                            status:
-                                existingAppointment.status
-
-                        },
-                        null,
-                        2
-                    )
-                    : "No appointment found"
-
-            );
 
         }
 
@@ -526,15 +402,26 @@ console.log(
 
             if (
                 !existingAppointment &&
-                (validatedData.customer?.phone || validatedData.customer?.email || validatedData.customer?.name)
+                (
+                    validatedData.customer?.phone ||
+                    validatedData.customer?.email ||
+                    validatedData.customer?.name
+                )
             ) {
 
                 existingAppointment =
                     await appointmentLookupService
                         .findBookedAppointmentByCustomerInfo({
-                            phone: validatedData.customer?.phone,
-                            email: validatedData.customer?.email,
-                            name: validatedData.customer?.name
+
+                            phone:
+                                validatedData.customer?.phone,
+
+                            email:
+                                validatedData.customer?.email,
+
+                            name:
+                                validatedData.customer?.name
+
                         });
 
                 if (
@@ -713,15 +600,26 @@ console.log(
 
             if (
                 !existingAppointment &&
-                (validatedData.customer?.phone || validatedData.customer?.email || validatedData.customer?.name)
+                (
+                    validatedData.customer?.phone ||
+                    validatedData.customer?.email ||
+                    validatedData.customer?.name
+                )
             ) {
 
                 existingAppointment =
                     await appointmentLookupService
                         .findBookedAppointmentByCustomerInfo({
-                            phone: validatedData.customer?.phone,
-                            email: validatedData.customer?.email,
-                            name: validatedData.customer?.name
+
+                            phone:
+                                validatedData.customer?.phone,
+
+                            email:
+                                validatedData.customer?.email,
+
+                            name:
+                                validatedData.customer?.name
+
                         });
 
                 if (
@@ -799,7 +697,10 @@ console.log(
                 !validatedData.preferredTime
             ) {
 
-                const customerName = existingAppointment.customer?.name || "there";
+                const customerName =
+                    existingAppointment.customer?.name ||
+                    "there";
+
 
                 const missingDateTimeResponse =
                     `Thanks, ${customerName}. I found your appointment. What date and time would you like instead?`;
@@ -867,19 +768,6 @@ console.log(
                         existingAppointment.id
 
                 });
-
-
-            console.log(
-                "RESCHEDULE AVAILABILITY:"
-            );
-
-            console.log(
-                JSON.stringify(
-                    rescheduleAvailability,
-                    null,
-                    2
-                )
-            );
 
 
             // ------------------------------------------------
@@ -1249,19 +1137,38 @@ console.log(
             ) {
 
                 const fieldLabels = {
-                    name: "Full name",
-                    phone: "Phone number",
-                    address: "Service address",
-                    email: "Email address"
+
+                    name:
+                        "Full name",
+
+                    phone:
+                        "Phone number",
+
+                    address:
+                        "Service address",
+
+                    email:
+                        "Email address"
+
                 };
 
-                const missingList = (qualification.missingFields || [])
-                    .filter(field => fieldLabels[field])
-                    .map(field => `• ${fieldLabels[field]}`);
 
-                const missingInformationResponse = missingList.length > 0
-                    ? `I just need a few details to complete your booking:\n\n${missingList.join("\n")}`
-                    : "Before I can book the appointment, please provide your full name, phone number, service address, and email address.";
+                const missingList =
+                    (qualification.missingFields || [])
+                        .filter(
+                            field =>
+                                fieldLabels[field]
+                        )
+                        .map(
+                            field =>
+                                `• ${fieldLabels[field]}`
+                        );
+
+
+                const missingInformationResponse =
+                    missingList.length > 0
+                        ? `I just need a few details to complete your booking:\n\n${missingList.join("\n")}`
+                        : "Before I can book the appointment, please provide your full name, phone number, service address, and email address.";
 
 
                 await conversationService.addMessage(
@@ -1320,19 +1227,6 @@ console.log(
                         validatedData.preferredTime
 
                 });
-
-
-            console.log(
-                "BOOKING AVAILABILITY RE-CHECK:"
-            );
-
-            console.log(
-                JSON.stringify(
-                    bookingAvailability,
-                    null,
-                    2
-                )
-            );
 
 
             // ------------------------------------------------
@@ -1695,19 +1589,6 @@ console.log(
 
                 });
 
-
-            console.log(
-                "APPOINTMENT AVAILABILITY:"
-            );
-
-            console.log(
-                JSON.stringify(
-                    availability,
-                    null,
-                    2
-                )
-            );
-
         }
 
 
@@ -1849,3 +1730,4 @@ console.log(
 module.exports = {
     chat
 };
+

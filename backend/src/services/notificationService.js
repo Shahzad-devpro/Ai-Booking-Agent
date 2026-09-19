@@ -1,19 +1,27 @@
 const { Resend } = require("resend");
-const prisma = require("../config/database");
+
+const prisma =
+    require("../config/database");
+
 const {
     BUSINESS_TIMEZONE
 } = require("../config/businessConfig");
 
-const resend = process.env.RESEND_API_KEY
-    ? new Resend(process.env.RESEND_API_KEY)
-    : null;
+
+const resend =
+    process.env.RESEND_API_KEY
+        ? new Resend(
+            process.env.RESEND_API_KEY
+        )
+        : null;
 
 
 // ============================================================
 // CONFIG
 // ============================================================
 
-const DEFAULT_SETTINGS_ID = "default";
+const DEFAULT_SETTINGS_ID =
+    "default";
 
 
 // ============================================================
@@ -43,15 +51,31 @@ const formatDateTime =
             {
                 timeZone:
                     BUSINESS_TIMEZONE,
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-                hour12: true
+
+                weekday:
+                    "long",
+
+                year:
+                    "numeric",
+
+                month:
+                    "long",
+
+                day:
+                    "numeric",
+
+                hour:
+                    "numeric",
+
+                minute:
+                    "2-digit",
+
+                hour12:
+                    true
             }
-        ).format(new Date(value));
+        ).format(
+            new Date(value)
+        );
     };
 
 
@@ -62,15 +86,31 @@ const escapeHtml =
             value === null ||
             value === undefined
         ) {
+
             return "";
         }
 
         return String(value)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
+            .replace(
+                /&/g,
+                "&amp;"
+            )
+            .replace(
+                /</g,
+                "&lt;"
+            )
+            .replace(
+                />/g,
+                "&gt;"
+            )
+            .replace(
+                /"/g,
+                "&quot;"
+            )
+            .replace(
+                /'/g,
+                "&#039;"
+            );
     };
 
 
@@ -83,13 +123,20 @@ const createNotificationRecord =
     }) => {
 
         return prisma.notification.create({
+
             data: {
+
                 type,
+
                 title,
+
                 message,
+
                 recipientEmail:
                     recipientEmail || null
+
             }
+
         });
     };
 
@@ -102,18 +149,10 @@ const sendEmail =
     }) => {
 
         if (!to) {
-            console.log(
-                "[Notification] Email skipped: recipient missing"
-            );
-
             return null;
         }
 
         if (!resend) {
-            console.log(
-                "[Notification] Email skipped: RESEND_API_KEY missing"
-            );
-
             return null;
         }
 
@@ -124,32 +163,37 @@ const sendEmail =
                 error
             } =
                 await resend.emails.send({
-                    from: getEmailFrom(),
-                    to: [to],
+
+                    from:
+                        getEmailFrom(),
+
+                    to:
+                        [to],
+
                     subject,
+
                     html
+
                 });
 
+
             if (error) {
+
                 console.error(
-                    "[Notification] Resend error:",
+                    "Notification email provider error:",
                     error
                 );
 
                 return null;
             }
 
-            console.log(
-                "[Notification] Email sent:",
-                data?.id
-            );
 
             return data;
 
         } catch (error) {
 
             console.error(
-                "[Notification] Email sending failed:",
+                "Notification email sending failed:",
                 error.message
             );
 
@@ -166,32 +210,56 @@ const getNotificationSettings =
     async () => {
 
         let settings =
-            await prisma.notificationSetting.findUnique({
-                where: {
-                    id: DEFAULT_SETTINGS_ID
-                }
-            });
+            await prisma
+                .notificationSetting
+                .findUnique({
+
+                    where: {
+
+                        id:
+                            DEFAULT_SETTINGS_ID
+
+                    }
+
+                });
+
 
         if (!settings) {
 
             settings =
-                await prisma.notificationSetting.create({
-                    data: {
-                        id:
-                            DEFAULT_SETTINGS_ID,
+                await prisma
+                    .notificationSetting
+                    .create({
 
-                        businessEmail:
-                            getBusinessEmail() ||
-                            "",
+                        data: {
 
-                        leadCreated: true,
-                        appointmentBooked: true,
-                        appointmentCancelled: true,
-                        appointmentRescheduled: true,
-                        customerEmails: true
-                    }
-                });
+                            id:
+                                DEFAULT_SETTINGS_ID,
+
+                            businessEmail:
+                                getBusinessEmail() ||
+                                "",
+
+                            leadCreated:
+                                true,
+
+                            appointmentBooked:
+                                true,
+
+                            appointmentCancelled:
+                                true,
+
+                            appointmentRescheduled:
+                                true,
+
+                            customerEmails:
+                                true
+
+                        }
+
+                    });
         }
+
 
         return settings;
     };
@@ -210,44 +278,53 @@ const updateNotificationSettings =
         const current =
             await getNotificationSettings();
 
-        return prisma.notificationSetting.update({
-            where: {
-                id:
-                    DEFAULT_SETTINGS_ID
-            },
 
-            data: {
-                businessEmail:
-                    businessEmail !== undefined
-                        ? businessEmail
-                        : current.businessEmail,
+        return prisma
+            .notificationSetting
+            .update({
 
-                leadCreated:
-                    leadCreated !== undefined
-                        ? leadCreated
-                        : current.leadCreated,
+                where: {
 
-                appointmentBooked:
-                    appointmentBooked !== undefined
-                        ? appointmentBooked
-                        : current.appointmentBooked,
+                    id:
+                        DEFAULT_SETTINGS_ID
 
-                appointmentCancelled:
-                    appointmentCancelled !== undefined
-                        ? appointmentCancelled
-                        : current.appointmentCancelled,
+                },
 
-                appointmentRescheduled:
-                    appointmentRescheduled !== undefined
-                        ? appointmentRescheduled
-                        : current.appointmentRescheduled,
+                data: {
 
-                customerEmails:
-                    customerEmails !== undefined
-                        ? customerEmails
-                        : current.customerEmails
-            }
-        });
+                    businessEmail:
+                        businessEmail !== undefined
+                            ? businessEmail
+                            : current.businessEmail,
+
+                    leadCreated:
+                        leadCreated !== undefined
+                            ? leadCreated
+                            : current.leadCreated,
+
+                    appointmentBooked:
+                        appointmentBooked !== undefined
+                            ? appointmentBooked
+                            : current.appointmentBooked,
+
+                    appointmentCancelled:
+                        appointmentCancelled !== undefined
+                            ? appointmentCancelled
+                            : current.appointmentCancelled,
+
+                    appointmentRescheduled:
+                        appointmentRescheduled !== undefined
+                            ? appointmentRescheduled
+                            : current.appointmentRescheduled,
+
+                    customerEmails:
+                        customerEmails !== undefined
+                            ? customerEmails
+                            : current.customerEmails
+
+                }
+
+            });
     };
 
 
@@ -263,24 +340,31 @@ const notifyLeadCreated =
             const settings =
                 await getNotificationSettings();
 
+
             if (!settings.leadCreated) {
                 return;
             }
+
 
             const recipient =
                 settings.businessEmail ||
                 getBusinessEmail();
 
+
             const customer =
                 lead.customer;
+
 
             const title =
                 "New Lead Received";
 
+
             const message =
                 `${customer?.name || "New customer"} submitted a new ${lead.service || "service"} request.`;
 
+
             await createNotificationRecord({
+
                 type:
                     "LEAD_CREATED",
 
@@ -290,9 +374,12 @@ const notifyLeadCreated =
 
                 recipientEmail:
                     recipient
+
             });
 
+
             await sendEmail({
+
                 to:
                     recipient,
 
@@ -349,7 +436,7 @@ const notifyLeadCreated =
         } catch (error) {
 
             console.error(
-                "[Notification] Lead notification failed:",
+                "Lead notification failed:",
                 error.message
             );
         }
@@ -368,6 +455,7 @@ const notifyAppointmentBooked =
             const settings =
                 await getNotificationSettings();
 
+
             const customer =
                 appointment.customer;
 
@@ -377,13 +465,16 @@ const notifyAppointmentBooked =
             const technician =
                 appointment.technician;
 
+
             const appointmentTime =
                 formatDateTime(
                     appointment.startTime
                 );
 
+
             const businessMessage =
                 `${customer?.name || "Customer"} booked an appointment for ${appointmentTime}.`;
+
 
             if (settings.appointmentBooked) {
 
@@ -391,7 +482,9 @@ const notifyAppointmentBooked =
                     settings.businessEmail ||
                     getBusinessEmail();
 
+
                 await createNotificationRecord({
+
                     type:
                         "APPOINTMENT_BOOKED",
 
@@ -403,9 +496,12 @@ const notifyAppointmentBooked =
 
                     recipientEmail:
                         recipient
+
                 });
 
+
                 await sendEmail({
+
                     to:
                         recipient,
 
@@ -516,7 +612,7 @@ const notifyAppointmentBooked =
         } catch (error) {
 
             console.error(
-                "[Notification] Booking notification failed:",
+                "Booking notification failed:",
                 error.message
             );
         }
@@ -546,13 +642,16 @@ const notifyAppointmentCancelled =
                     appointment.startTime
                 );
 
+
             if (settings.appointmentCancelled) {
 
                 const recipient =
                     settings.businessEmail ||
                     getBusinessEmail();
 
+
                 await createNotificationRecord({
+
                     type:
                         "APPOINTMENT_CANCELLED",
 
@@ -564,9 +663,12 @@ const notifyAppointmentCancelled =
 
                     recipientEmail:
                         recipient
+
                 });
 
+
                 await sendEmail({
+
                     to:
                         recipient,
 
@@ -655,7 +757,7 @@ const notifyAppointmentCancelled =
         } catch (error) {
 
             console.error(
-                "[Notification] Cancellation notification failed:",
+                "Cancellation notification failed:",
                 error.message
             );
         }
@@ -686,6 +788,7 @@ const notifyAppointmentRescheduled =
             const technician =
                 appointment.technician;
 
+
             const oldTime =
                 formatDateTime(
                     previousStartTime
@@ -696,13 +799,16 @@ const notifyAppointmentRescheduled =
                     appointment.startTime
                 );
 
+
             if (settings.appointmentRescheduled) {
 
                 const recipient =
                     settings.businessEmail ||
                     getBusinessEmail();
 
+
                 await createNotificationRecord({
+
                     type:
                         "APPOINTMENT_RESCHEDULED",
 
@@ -714,9 +820,12 @@ const notifyAppointmentRescheduled =
 
                     recipientEmail:
                         recipient
+
                 });
 
+
                 await sendEmail({
+
                     to:
                         recipient,
 
@@ -813,7 +922,7 @@ const notifyAppointmentRescheduled =
         } catch (error) {
 
             console.error(
-                "[Notification] Reschedule notification failed:",
+                "Reschedule notification failed:",
                 error.message
             );
         }
@@ -846,15 +955,18 @@ const getNotifications =
                 )
             );
 
+
         const where = {};
 
         if (unreadOnly) {
             where.readAt = null;
         }
 
+
         const skip =
             (safePage - 1) *
             safeLimit;
+
 
         const [
             notifications,
@@ -862,34 +974,50 @@ const getNotifications =
         ] = await Promise.all([
 
             prisma.notification.findMany({
+
                 where,
 
                 orderBy: {
+
                     createdAt:
                         "desc"
+
                 },
 
                 skip,
 
                 take:
                     safeLimit
+
             }),
 
             prisma.notification.count({
+
                 where
+
             })
+
         ]);
 
+
         return {
+
             notifications,
+
             total,
-            page: safePage,
-            limit: safeLimit,
+
+            page:
+                safePage,
+
+            limit:
+                safeLimit,
+
             totalPages:
                 Math.ceil(
                     total /
                     safeLimit
                 )
+
         };
     };
 
@@ -898,6 +1026,7 @@ const markNotificationAsRead =
     async id => {
 
         if (!id) {
+
             const error =
                 new Error(
                     "Notification ID is required"
@@ -908,15 +1037,20 @@ const markNotificationAsRead =
             throw error;
         }
 
+
         return prisma.notification.update({
+
             where: {
                 id
             },
 
             data: {
+
                 readAt:
                     new Date()
+
             }
+
         });
     };
 
@@ -927,13 +1061,19 @@ const markAllNotificationsAsRead =
         return prisma.notification.updateMany({
 
             where: {
-                readAt: null
+
+                readAt:
+                    null
+
             },
 
             data: {
+
                 readAt:
                     new Date()
+
             }
+
         });
     };
 
@@ -942,9 +1082,14 @@ const getUnreadNotificationCount =
     async () => {
 
         return prisma.notification.count({
+
             where: {
-                readAt: null
+
+                readAt:
+                    null
+
             }
+
         });
     };
 
@@ -970,4 +1115,5 @@ module.exports = {
     getNotificationSettings,
 
     updateNotificationSettings
+
 };

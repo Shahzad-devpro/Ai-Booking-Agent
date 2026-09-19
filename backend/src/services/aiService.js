@@ -18,10 +18,6 @@ const groq = new Groq({
 
 const generateAIResponse = async (conversationMessages) => {
 
-    // --------------------------------------------------------
-    // 1. Validate conversation messages
-    // --------------------------------------------------------
-
     if (
         !conversationMessages ||
         !Array.isArray(conversationMessages) ||
@@ -37,10 +33,6 @@ const generateAIResponse = async (conversationMessages) => {
         throw error;
     }
 
-
-    // --------------------------------------------------------
-    // 2. Build AI messages
-    // --------------------------------------------------------
 
     const messages = [
 
@@ -434,21 +426,11 @@ has actually completed it.
         },
 
         ...conversationMessages.map((message) => ({
-
-            role:
-                message.role.toLowerCase(),
-
-            content:
-                message.content
-
+            role: message.role.toLowerCase(),
+            content: message.content
         }))
-
     ];
 
-
-    // --------------------------------------------------------
-    // 3. Call Groq
-    // --------------------------------------------------------
 
     const completion =
         await groq.chat.completions.create({
@@ -464,13 +446,8 @@ has actually completed it.
             reasoning_effort: "low",
 
             reasoning_format: "hidden"
-
         });
 
-
-    // --------------------------------------------------------
-    // 4. Extract response
-    // --------------------------------------------------------
 
     const response =
         completion
@@ -479,28 +456,11 @@ has actually completed it.
             ?.content;
 
 
-    // --------------------------------------------------------
-    // 5. Validate response
-    // --------------------------------------------------------
-
     if (
         !response ||
         typeof response !== "string" ||
         response.trim().length === 0
     ) {
-
-        console.log(
-            "RAW GROQ GENERATION RESPONSE:"
-        );
-
-        console.log(
-            JSON.stringify(
-                completion,
-                null,
-                2
-            )
-        );
-
 
         const error = new Error(
             "AI returned an empty response"
@@ -522,10 +482,6 @@ has actually completed it.
 
 const extractLeadData = async (conversationMessages) => {
 
-    // --------------------------------------------------------
-    // 1. Validate conversation messages
-    // --------------------------------------------------------
-
     if (
         !conversationMessages ||
         !Array.isArray(conversationMessages) ||
@@ -542,19 +498,11 @@ const extractLeadData = async (conversationMessages) => {
     }
 
 
-    // --------------------------------------------------------
-    // 2. Current date in business timezone
-    // --------------------------------------------------------
-
     const currentBusinessDate =
         DateTime.now()
             .setZone(BUSINESS_TIMEZONE)
             .toISODate();
 
-
-    // --------------------------------------------------------
-    // 3. Build extraction prompt
-    // --------------------------------------------------------
 
     const messages = [
 
@@ -674,21 +622,11 @@ GENERAL EXTRACTION RULES:
         },
 
         ...conversationMessages.map((message) => ({
-
-            role:
-                message.role.toLowerCase(),
-
-            content:
-                message.content
-
+            role: message.role.toLowerCase(),
+            content: message.content
         }))
-
     ];
 
-
-    // --------------------------------------------------------
-    // 4. Call Groq
-    // --------------------------------------------------------
 
     const completion =
         await groq.chat.completions.create({
@@ -708,13 +646,8 @@ GENERAL EXTRACTION RULES:
             response_format: {
                 type: "json_object"
             }
-
         });
 
-
-    // --------------------------------------------------------
-    // 5. Extract response
-    // --------------------------------------------------------
 
     const response =
         completion
@@ -722,32 +655,6 @@ GENERAL EXTRACTION RULES:
             ?.message
             ?.content;
 
-
-    // --------------------------------------------------------
-    // 6. Debug information
-    // --------------------------------------------------------
-
-    console.log(
-        "CURRENT BUSINESS DATE:",
-        currentBusinessDate
-    );
-
-    console.log(
-        "RAW GROQ EXTRACTION RESPONSE:"
-    );
-
-    console.log(
-        JSON.stringify(
-            completion,
-            null,
-            2
-        )
-    );
-
-
-    // --------------------------------------------------------
-    // 7. Validate response
-    // --------------------------------------------------------
 
     if (
         !response ||
@@ -765,10 +672,6 @@ GENERAL EXTRACTION RULES:
     }
 
 
-    // --------------------------------------------------------
-    // 8. Parse JSON
-    // --------------------------------------------------------
-
     try {
 
         return JSON.parse(
@@ -776,15 +679,6 @@ GENERAL EXTRACTION RULES:
         );
 
     } catch (error) {
-
-        console.log(
-            "INVALID AI JSON:"
-        );
-
-        console.log(
-            response
-        );
-
 
         const parseError = new Error(
             "AI returned invalid JSON"
@@ -808,10 +702,6 @@ const generateAvailabilityResponse = async ({
     preferredTime
 }) => {
 
-    // --------------------------------------------------------
-    // 1. Validate conversation messages
-    // --------------------------------------------------------
-
     if (
         !conversationMessages ||
         !Array.isArray(conversationMessages) ||
@@ -828,10 +718,6 @@ const generateAvailabilityResponse = async ({
     }
 
 
-    // --------------------------------------------------------
-    // 2. Validate availability
-    // --------------------------------------------------------
-
     if (
         !availability ||
         typeof availability.available !== "boolean"
@@ -846,10 +732,6 @@ const generateAvailabilityResponse = async ({
         throw error;
     }
 
-
-    // --------------------------------------------------------
-    // 3. Validate appointment date/time
-    // --------------------------------------------------------
 
     if (
         !preferredDate ||
@@ -867,10 +749,6 @@ const generateAvailabilityResponse = async ({
         throw error;
     }
 
-
-    // --------------------------------------------------------
-    // 4. Build trusted backend availability context
-    // --------------------------------------------------------
 
     const availabilityContext =
         availability.available
@@ -907,14 +785,9 @@ const generateAvailabilityResponse = async ({
             };
 
 
-    // --------------------------------------------------------
-    // 5. Build AI messages
-    // --------------------------------------------------------
-
     const messages = [
 
         {
-
             role: "system",
 
             content: `
@@ -1046,6 +919,7 @@ appointment options visually.
 
 The AI message should provide context, not duplicate the
 entire availability card.
+
 ============================================================
 BACKEND AVAILABILITY DATA
 ============================================================
@@ -1059,7 +933,6 @@ ${JSON.stringify(
         },
 
         ...conversationMessages.map((message) => ({
-
             role:
                 message.role === "USER"
                     ? "user"
@@ -1067,15 +940,9 @@ ${JSON.stringify(
 
             content:
                 message.content
-
         }))
-
     ];
 
-
-    // --------------------------------------------------------
-    // 6. Call Groq
-    // --------------------------------------------------------
 
     const completion =
         await groq.chat.completions.create({
@@ -1091,13 +958,8 @@ ${JSON.stringify(
             reasoning_effort: "low",
 
             reasoning_format: "hidden"
-
         });
 
-
-    // --------------------------------------------------------
-    // 7. Extract response
-    // --------------------------------------------------------
 
     const response =
         completion
@@ -1107,28 +969,11 @@ ${JSON.stringify(
             ?.trim();
 
 
-    // --------------------------------------------------------
-    // 8. Validate response
-    // --------------------------------------------------------
-
     if (
         !response ||
         typeof response !== "string" ||
         response.length === 0
     ) {
-
-        console.log(
-            "RAW GROQ AVAILABILITY RESPONSE:"
-        );
-
-        console.log(
-            JSON.stringify(
-                completion,
-                null,
-                2
-            )
-        );
-
 
         const error = new Error(
             "AI returned an empty availability response"
@@ -1153,4 +998,3 @@ module.exports = {
     extractLeadData,
     generateAvailabilityResponse
 };
-

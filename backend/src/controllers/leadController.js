@@ -1,25 +1,46 @@
-const { message } = require("../config/database");
-const leadService = require("../services/leadServices");
-const createLead = async (req,res) => {
-    try{
-        const lead = await leadService.createLead(req.body);
+const leadService =
+    require("../services/leadServices");
+
+
+// ============================================================
+// CREATE LEAD
+// ============================================================
+
+const createLead = async (req, res, next) => {
+
+    try {
+
+        const lead =
+            await leadService.createLead(
+                req.body
+            );
+
         res.status(201).json({
+
             success: true,
-            message: "lead created successfully",
-            data: lead
+
+            message:
+                "Lead created successfully",
+
+            data:
+                lead
+
         });
-    }
-    catch(error){
-        console.error("Create lead error:",error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to create lead"
-        });
+
+    } catch (error) {
+
+        next(error);
 
     }
 };
 
+
+// ============================================================
+// GET ALL LEADS
+// ============================================================
+
 const getAllLeads = async (req, res, next) => {
+
     try {
 
         const {
@@ -33,82 +54,139 @@ const getAllLeads = async (req, res, next) => {
 
         const result =
             await leadService.getAllLeads({
+
                 search,
                 status,
                 urgency,
-                page: Number(page),
-                limit: Number(limit)
+
+                page:
+                    Number(page),
+
+                limit:
+                    Number(limit)
+
             });
 
 
         res.status(200).json({
+
             success: true,
-            data: result
+
+            data:
+                result
+
         });
 
     } catch (error) {
+
         next(error);
+
     }
 };
 
 
-const getLeadById = async (req, res) => {
+// ============================================================
+// GET LEAD BY ID
+// ============================================================
+
+const getLeadById = async (req, res, next) => {
+
     try {
+
         const lead =
             await leadService.getLeadById(
                 req.params.id
             );
 
+
         if (!lead) {
+
             return res.status(404).json({
+
                 success: false,
-                message: "Lead not found"
+
+                message:
+                    "Lead not found"
+
             });
+
         }
 
+
         res.status(200).json({
+
             success: true,
-            data: lead
+
+            data:
+                lead
+
         });
 
     } catch (error) {
-        console.log(
-            "Get lead error:",
-            error
-        );
 
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch lead"
-        });
+        next(error);
+
     }
 };
 
 
+// ============================================================
+// UPDATE LEAD STATUS
+// ============================================================
 
-const updateLeadStatus = async(req, res) => {
-    try{
-        const{status} = req.body;
-        const lead = await leadService.updateLeadStatus(req.params.id, status);
-        res.status(200).json({
-            success: true,
-            message: "Lead status updated successfully",
-            data: lead
-        });
-    } catch(error){
-        console.log("Update lead status error:",error);
+const updateLeadStatus =
+    async (req, res, next) => {
 
-        res.status(500).json({
-            success: false,
-            message: "Failed to upload the lead status"
-        });
-    }
+        try {
 
-};
+            const {
+                status
+            } = req.body;
+
+
+            const lead =
+                await leadService.updateLeadStatus(
+
+                    req.params.id,
+
+                    status
+
+                );
+
+
+            res.status(200).json({
+
+                success: true,
+
+                message:
+                    "Lead status updated successfully",
+
+                data:
+                    lead
+
+            });
+
+        } catch (error) {
+
+            next(error);
+
+        }
+
+    };
+
+
+// ============================================================
+// EXPORTS
+// ============================================================
 
 module.exports = {
+
     createLead,
+
     getAllLeads,
+
     getLeadById,
+
     updateLeadStatus
+
 };
