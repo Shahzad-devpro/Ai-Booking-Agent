@@ -135,6 +135,10 @@ const createLeadFromConversation = async ({
                 });
 
                 return newLead;
+            },
+            {
+                maxWait: 3000,
+                timeout: 15000
             }
         );
 

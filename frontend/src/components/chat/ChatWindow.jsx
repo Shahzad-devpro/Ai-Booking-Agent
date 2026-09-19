@@ -18,6 +18,8 @@ import TypingIndicator from "./TypingIndicator";
 import useChat from "../../hooks/useChat";
 import AvailabilityCard from "./AvailabilityCard";
 import BookingConfirmation from "./BookingConfirmation";
+import CancellationConfirmation from "./CancellationConfirmation";
+import RescheduleConfirmation from "./RescheduleConfirmation";
 
 const quickActions = [
     {
@@ -42,25 +44,39 @@ const quickActions = [
     },
 ];
 
+const BUSINESS_TIMEZONE = "America/New_York";
+
 const formatSlotDate = (isoString) => {
     if (!isoString) return "";
+
+    const date = new Date(isoString);
+
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
 
     return new Intl.DateTimeFormat("en-CA", {
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
-        timeZone: "America/New_York",
-    }).format(new Date(isoString));
+        timeZone: BUSINESS_TIMEZONE,
+    }).format(date);
 };
 
 const formatSlotTime = (isoString) => {
     if (!isoString) return "";
 
+    const date = new Date(isoString);
+
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
     return new Intl.DateTimeFormat("en-US", {
         hour: "numeric",
         minute: "2-digit",
-        timeZone: "America/New_York",
-    }).format(new Date(isoString));
+        timeZone: BUSINESS_TIMEZONE,
+    }).format(date);
 };
 
 const ChatWindow = () => {
@@ -132,10 +148,13 @@ const ChatWindow = () => {
 
     return (
         <div className="flex h-[100dvh] min-h-0 w-full min-w-0 flex-col overflow-hidden bg-slate-50">
+
             {/* HEADER */}
             <header className="w-full shrink-0 border-b border-slate-200 bg-white">
                 <div className="mx-auto flex h-14 w-full min-w-0 items-center justify-between px-2 sm:h-16 sm:px-6">
+
                     <div className="flex min-w-0 flex-1 items-center gap-2">
+
                         <button
                             type="button"
                             onClick={() => window.history.back()}
@@ -152,6 +171,7 @@ const ChatWindow = () => {
                         </div>
 
                         <div className="min-w-0 flex-1">
+
                             <h1 className="truncate text-xs font-bold text-slate-900 sm:text-base">
                                 CoolAir AI Receptionist
                             </h1>
@@ -159,13 +179,15 @@ const ChatWindow = () => {
                             <p className="truncate text-[10px] text-slate-400 sm:text-xs">
                                 Your HVAC service assistant
                             </p>
+
                         </div>
                     </div>
 
                     <div className="hidden shrink-0 items-center gap-4 sm:flex">
+
                         <div className="flex items-center gap-1.5 text-xs text-slate-500">
                             <Clock3 size={14} />
-                            9 AM – 5 PM
+                           Business Hours: 9 AM – 5 PM
                         </div>
 
                         <div className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -175,14 +197,18 @@ const ChatWindow = () => {
                             />
                             Secure
                         </div>
+
                     </div>
                 </div>
             </header>
 
             {/* CHAT AREA */}
             <main className="min-h-0 w-full min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+
                 <div className="mx-auto w-full max-w-4xl min-w-0 px-2 py-5 sm:px-6 sm:py-8">
+
                     <div className="mb-6 w-full text-center sm:mb-8">
+
                         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-600 sm:h-14 sm:w-14">
                             <Sparkles size={22} />
                         </div>
@@ -196,14 +222,17 @@ const ChatWindow = () => {
                             cooling system and we'll help you with the next
                             step.
                         </p>
+
                     </div>
 
                     <div className="flex w-full min-w-0 flex-col gap-4 sm:gap-5">
+
                         {messages.map((message) => (
                             <div
                                 key={message.id}
                                 className="flex w-full min-w-0 flex-col gap-2"
                             >
+
                                 <MessageBubble
                                     role={message.role}
                                     content={message.content}
@@ -211,6 +240,7 @@ const ChatWindow = () => {
 
                                 {message.availability && (
                                     <div className="ml-10 max-w-md">
+
                                         <AvailabilityCard
                                             availability={message.availability}
                                             disabled={isTyping}
@@ -230,28 +260,63 @@ const ChatWindow = () => {
                                                 );
                                             }}
                                         />
+
                                     </div>
                                 )}
 
-                                {message.appointment && (
-                                    <div className="ml-10 max-w-md">
-                                        <BookingConfirmation
-                                            appointment={message.appointment}
-                                            lead={message.lead}
-                                        />
-                                    </div>
-                                )}
+                                {message.action === "BOOKED" &&
+                                    message.appointment && (
+                                        <div className="ml-10 max-w-md">
+                                            <BookingConfirmation
+                                                appointment={
+                                                    message.appointment
+                                                }
+                                                lead={message.lead}
+                                            />
+                                        </div>
+                                    )}
+
+                                {message.action === "CANCELLED" &&
+                                    message.appointment && (
+                                        <div className="ml-10 max-w-md">
+                                            <CancellationConfirmation
+                                                appointment={
+                                                    message.appointment
+                                                }
+                                                lead={message.lead}
+                                            />
+                                        </div>
+                                    )}
+
+                                {message.action === "RESCHEDULED" &&
+                                    message.appointment && (
+                                        <div className="ml-10 max-w-md">
+                                            <RescheduleConfirmation
+                                                appointment={
+                                                    message.appointment
+                                                }
+                                                previousAppointment={
+                                                    message.previousAppointment
+                                                }
+                                                lead={message.lead}
+                                            />
+                                        </div>
+                                    )}
+
                             </div>
                         ))}
 
                         {isTyping && <TypingIndicator />}
 
                         <div ref={messagesEndRef} />
+
                     </div>
 
                     {showQuickActions && !isTyping && (
                         <div className="mt-6 w-full min-w-0 sm:mt-8">
+
                             <div className="mb-3 flex items-center gap-2">
+
                                 <MessageCircle
                                     size={14}
                                     className="text-sky-500"
@@ -260,9 +325,11 @@ const ChatWindow = () => {
                                 <span className="text-xs font-bold text-slate-500">
                                     Quick start
                                 </span>
+
                             </div>
 
                             <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
+
                                 {quickActions.map((action) => {
                                     const Icon = action.icon;
 
@@ -277,11 +344,13 @@ const ChatWindow = () => {
                                             }
                                             className="flex min-w-0 w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-sky-200 hover:shadow-md"
                                         >
+
                                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
                                                 <Icon size={15} />
                                             </span>
 
                                             <span className="min-w-0 flex-1">
+
                                                 <span className="block truncate text-xs font-bold text-slate-800">
                                                     {action.label}
                                                 </span>
@@ -289,15 +358,18 @@ const ChatWindow = () => {
                                                 <span className="mt-0.5 block truncate text-[10px] text-slate-400">
                                                     Start with this request
                                                 </span>
+
                                             </span>
 
                                             <ArrowRight
                                                 size={14}
                                                 className="shrink-0 text-slate-300"
                                             />
+
                                         </button>
                                     );
                                 })}
+
                             </div>
                         </div>
                     )}
@@ -307,6 +379,7 @@ const ChatWindow = () => {
                             Conversation connected
                         </p>
                     )}
+
                 </div>
             </main>
 
@@ -318,11 +391,14 @@ const ChatWindow = () => {
                         "max(8px, env(safe-area-inset-bottom))",
                 }}
             >
+
                 <form
                     className="mx-auto w-full max-w-4xl min-w-0 px-2 pt-2 sm:px-6 sm:pt-4"
                     onSubmit={handleSubmit}
                 >
+
                     <div className="flex w-full min-w-0 items-end gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-1 focus-within:border-sky-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-sky-50 sm:rounded-2xl sm:p-1.5">
+
                         <textarea
                             ref={textareaRef}
                             value={input}
@@ -345,14 +421,17 @@ const ChatWindow = () => {
                         >
                             <Send size={16} />
                         </button>
+
                     </div>
 
                     <p className="mt-1 px-1 text-center text-[9px] leading-4 text-slate-400 sm:mt-2 sm:text-[11px]">
                         AI receptionist • Secure service request • Enter to
                         send
                     </p>
+
                 </form>
             </footer>
+
         </div>
     );
 };

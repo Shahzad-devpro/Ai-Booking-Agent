@@ -117,6 +117,7 @@ const getRescheduleIntent = ({
 
         /\bi want to move\b/,
         /\bi want to change\b/,
+        /\bi want to reschedule\b/,
 
         /\bi'd like to move\b/,
         /\bi'd like to change\b/,
@@ -479,6 +480,96 @@ const getRescheduleIntent = ({
 
 
     // ========================================================
+    // 8.5 ONGOING RESCHEDULE CONTEXT DETECTOR
+    // ========================================================
+
+    let isOngoingRescheduleFlow = false;
+
+    if (Array.isArray(conversationMessages) && conversationMessages.length > 0) {
+
+        let lastCompletedIndex = -1;
+
+        for (let i = conversationMessages.length - 1; i >= 0; i--) {
+            const msg = conversationMessages[i];
+            if (
+                msg &&
+                msg.role === "ASSISTANT" &&
+                typeof msg.content === "string" &&
+                /\bhas been rescheduled successfully\b/i.test(msg.content)
+            ) {
+                lastCompletedIndex = i;
+                break;
+            }
+        }
+
+        const startIndex = lastCompletedIndex >= 0 ? lastCompletedIndex + 1 : 0;
+
+        for (let i = startIndex; i < conversationMessages.length; i++) {
+            const msg = conversationMessages[i];
+            if (!msg || typeof msg.content !== "string") continue;
+
+            const content = msg.content.trim().toLowerCase().replace(/[’‘]/g, "'").replace(/\s+/g, " ");
+
+            const indicatesRescheduleUser =
+                directReschedulePatterns.some(pattern => pattern.test(content)) ||
+                naturalLanguagePatterns.some(pattern => pattern.test(content)) ||
+                referencePatterns.some(pattern => pattern.test(content));
+
+            const indicatesRescheduleAssistant =
+                msg.role === "ASSISTANT" && (
+                    /\breschedule\b/.test(content) ||
+                    /\bwhat date and time would you like instead\b/.test(content) ||
+                    /\bpreferred new date\b/.test(content)
+                );
+
+            if (indicatesRescheduleUser || indicatesRescheduleAssistant) {
+                isOngoingRescheduleFlow = true;
+                break;
+            }
+        }
+    }
+
+
+    // ========================================================
+    // 8.6 ONGOING CANCELLATION CONTEXT DETECTOR
+    // ========================================================
+
+    let isOngoingCancellationFlow = false;
+
+    if (Array.isArray(conversationMessages) && conversationMessages.length > 0) {
+
+        let lastCancelledIndex = -1;
+
+        for (let i = conversationMessages.length - 1; i >= 0; i--) {
+            const msg = conversationMessages[i];
+            if (
+                msg &&
+                msg.role === "ASSISTANT" &&
+                typeof msg.content === "string" &&
+                /\bhas been cancelled successfully\b/i.test(msg.content)
+            ) {
+                lastCancelledIndex = i;
+                break;
+            }
+        }
+
+        const startIndex = lastCancelledIndex >= 0 ? lastCancelledIndex + 1 : 0;
+
+        for (let i = startIndex; i < conversationMessages.length; i++) {
+            const msg = conversationMessages[i];
+            if (!msg || typeof msg.content !== "string") continue;
+
+            const content = msg.content.trim().toLowerCase().replace(/[’‘]/g, "'").replace(/\s+/g, " ");
+
+            if (/\bcancel\b/.test(content) || /\bcall off\b/.test(content)) {
+                isOngoingCancellationFlow = true;
+                break;
+            }
+        }
+    }
+
+
+    // ========================================================
     // 9. FINAL RESULT
     // ========================================================
 
@@ -486,7 +577,10 @@ const getRescheduleIntent = ({
         hasDirectRescheduleIntent ||
         hasNaturalLanguageIntent ||
         hasReferenceIntent ||
-        hasAlternativeSelectionIntent;
+        (
+            !isOngoingCancellationFlow &&
+            (hasAlternativeSelectionIntent || isOngoingRescheduleFlow)
+        );
 
 
     return {

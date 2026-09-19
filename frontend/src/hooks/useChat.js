@@ -56,6 +56,8 @@ const useChat = () => {
                     content: data.message,
 
                     // Preserve structured backend data.
+                    action: data.action ?? null,
+                    previousAppointment: data.previousAppointment ?? null,
                     availability: data.availability ?? null,
                     appointment: data.appointment ?? null,
                     lead: data.lead ?? null,

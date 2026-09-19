@@ -75,6 +75,19 @@ const validateExtractedLeadData = (data) => {
     data.preferredTime =
         normalizeNull(data.preferredTime);
 
+    // Provide sensible defaults for appointment booking when specific HVAC breakdown isn't described
+    if (data.wantsAppointment || data.preferredDate || data.preferredTime) {
+        if (!data.service) {
+            data.service = "HVAC_MAINTENANCE";
+        }
+        if (!data.problemDescription) {
+            data.problemDescription = "HVAC service appointment request";
+        }
+        if (!data.urgency) {
+            data.urgency = "NORMAL";
+        }
+    }
+
     if (
         data.service !== null &&
         !ALLOWED_SERVICES.includes(data.service)

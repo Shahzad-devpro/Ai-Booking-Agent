@@ -420,6 +420,10 @@ const createAppointment =
 
 
                     return created;
+                },
+                {
+                    maxWait: 3000,
+                    timeout: 15000
                 }
             );
 
@@ -847,6 +851,10 @@ const cancelAppointment =
                             "CANCELLED"
                     }
                 });
+            },
+            {
+                maxWait: 3000,
+                timeout: 15000
             }
         );
 
@@ -995,10 +1003,13 @@ const rescheduleAppointment =
                     }
                 });
             },
-
             {
                 isolationLevel:
-                    "Serializable"
+                    "Serializable",
+                maxWait:
+                    3000,
+                timeout:
+                    15000
             }
         );
 
