@@ -16,9 +16,7 @@ const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
 
-const isProduction =
-    process.env.NODE_ENV === "production";
-
+const isProduction = process.env.NODE_ENV === "production";
 
 // ============================================================
 // SECURITY
@@ -26,10 +24,13 @@ const isProduction =
 
 app.disable("x-powered-by");
 
-if (isProduction || process.env.TRUST_PROXY === "true" || process.env.TRUST_PROXY === "1") {
+if (
+    isProduction ||
+    process.env.TRUST_PROXY === "true" ||
+    process.env.TRUST_PROXY === "1"
+) {
     app.set("trust proxy", 1);
 }
-
 
 // ============================================================
 // CORS
@@ -47,24 +48,34 @@ const defaultLocalOrigins = [
     "http://127.0.0.1:3000",
 ];
 
-const allowedOrigins = configuredFrontendUrl
-    ? Array.from(
-        new Set([
-            ...configuredFrontendUrl
-                .split(",")
-                .map((origin) => origin.trim())
-                .filter(Boolean),
-            ...defaultLocalOrigins,
-        ])
-    )
-    : defaultLocalOrigins;
+let allowedOrigins;
+
+if (isProduction) {
+    allowedOrigins = configuredFrontendUrl
+        ? configuredFrontendUrl
+            .split(",")
+            .map((origin) => origin.trim())
+            .filter(Boolean)
+        : [];
+} else {
+    allowedOrigins = configuredFrontendUrl
+        ? Array.from(
+            new Set([
+                ...configuredFrontendUrl
+                    .split(",")
+                    .map((origin) => origin.trim())
+                    .filter(Boolean),
+                ...defaultLocalOrigins,
+            ])
+        )
+        : defaultLocalOrigins;
+}
 
 app.use(
     cors({
         origin: (origin, callback) => {
-
-            // Allow server-to-server / local tools that
-            // do not send an Origin header.
+            // Allow server-to-server requests and tools
+            // that do not send an Origin header.
             if (!origin) {
                 return callback(null, true);
             }
@@ -96,15 +107,11 @@ app.use(
     })
 );
 
-
 // ============================================================
 // SECURITY HEADERS
 // ============================================================
 
-app.use(
-    helmet()
-);
-
+app.use(helmet());
 
 // ============================================================
 // REQUEST SIZE LIMITS
@@ -122,7 +129,6 @@ app.use(
         limit: "100kb",
     })
 );
-
 
 // ============================================================
 // RATE LIMITERS
@@ -178,15 +184,19 @@ const chatLimiter = rateLimit({
     },
 });
 
+// ============================================================
+// GENERAL API RATE LIMIT
+// ============================================================
 
-// General protection for all API endpoints.
 app.use(
     "/api",
     generalLimiter
 );
 
+// ============================================================
+// AUTH RATE LIMIT
+// ============================================================
 
-// Stricter protection for authentication.
 app.use(
     "/api/auth/login",
     authLimiter
@@ -197,31 +207,14 @@ app.use(
     authLimiter
 );
 
+// ============================================================
+// AI CHAT RATE LIMIT
+// ============================================================
 
-// AI requests are more expensive, so protect them separately.
 app.use(
     "/api/chat",
     chatLimiter
 );
-
-
-// ============================================================
-// HEALTH
-// ============================================================
-
-app.get(
-    "/api/health",
-    (req, res) => {
-        res.json({
-            success: true,
-            message:
-                "AI Booking & Receptionist Agent API is running",
-            environment:
-                process.env.NODE_ENV || "development",
-        });
-    }
-);
-
 
 // ============================================================
 // ROUTES
@@ -267,21 +260,21 @@ app.use(
     notificationRoutes
 );
 
+// ============================================================
+// 404 HANDLER
+// ============================================================
 
-// 404 Handler for unhandled routes
-app.use((req, res, next) => {
+app.use((req, res) => {
     res.status(404).json({
         success: false,
-        message: `Route not found: ${req.method} ${req.originalUrl}`
+        message: `Route not found: ${req.method} ${req.originalUrl}`,
     });
 });
 
-
 // ============================================================
-// ERROR HANDLER
+// CENTRAL ERROR HANDLER
 // ============================================================
 
 app.use(errorHandler);
-
 
 module.exports = app;
